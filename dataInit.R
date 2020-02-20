@@ -132,7 +132,7 @@ Init <- function(sim) {
     # define a local function that recompiles RasterStack objects (yuck)
     recompile.rs <- function(name) {
       #browser()
-      mu.id = strtoi(substr(name, 4, 5))
+      mu.id = as.integer(substr(name, 4, 50))
       rs <- stack(rs.list[name])
       df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
       df$key <- as.double(rownames(df)) # add hashcode (index) as double column
@@ -147,6 +147,7 @@ Init <- function(sim) {
       #r.age <- 10 * rs[[2]] # convert to age unit to years
       return(stack(r.muid, r.thlb, r.au, r.blockid, r.age))
     }
+    #browser()
     rs.list <- sapply(names(rs.list), recompile.rs)
     # prep rs for use as arg in do.call wrapper to raster::mosaic function
     names(rs.list) <- NULL # else TSA names will be interpreted as arg names by raster::mosaic
