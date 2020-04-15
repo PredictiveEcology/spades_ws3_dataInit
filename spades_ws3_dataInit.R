@@ -1,28 +1,28 @@
-library(dplyr)
 # Everything in this file gets sourced during simInit, and all functions and objects
 # are put into the simList. To use objects, use sim$xxx, and are thus globally available
 # to all modules. Functions can be used without sim$ as they are namespaced, like functions
 # in R packages. If exact location is required, functions will be: sim$<moduleName>$FunctionName
 defineModule(sim, list(
-  name = "dataInit",
+  name = "spades_ws3_dataInit",
   description = NA, #"insert module description here",
   keywords = NA, # c("insert key words here"),
   authors = c(person(c("First", "Middle"), "Last", email = "email@example.com", role = c("aut", "cre"))),
   childModules = character(0),
-  version = list(SpaDES.core = "0.2.5.9000", dataInit = "0.0.1"),
+  version = list(SpaDES.core = "0.2.5.9000", spades_ws3_dataInit = "0.0.1"),
   spatialExtent = raster::extent(rep(NA_real_, 4)),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
-  documentation = list("README.txt", "dataInit.Rmd"),
-  reqdPkgs = list("reticulate", "raster"),
+  documentation = list("README.txt", "spades_ws3_dataInit.Rmd"),
+  reqdPkgs = list("reticulate", "raster", 'dplyr'),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
     #defineParameter("", NA, NA, NA, ""),
     defineParameter("basenames", "character", NA, NA, NA, "MU baseneames to load"),
-    defineParameter("tifPath", "character", "tif", NA, NA, "Path to TIF raster inventory files"), 
+    defineParameter("base.year", 'numeric', 2015, NA, NA, "base year of forest inventory data"),
+    defineParameter("tifPath", "character", "tif", NA, NA, "Path to TIF raster inventory files"),
     defineParameter("hdtPath", "character", "hdt", NA, NA, "Path to pickled hdt files"),
-    defineParameter("hdtPrefix", "character", "hdt_", NA, NA, "HDT filename prefix"), 
+    defineParameter("hdtPrefix", "character", "hdt_", NA, NA, "HDT filename prefix"),
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first plot event should occur"),
     defineParameter(".plotInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between plot events"),
     defineParameter(".saveInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first save event should occur"),
@@ -43,11 +43,11 @@ defineModule(sim, list(
 ## event types
 #   - type `init` is required for initialization
 
-doEvent.dataInit = function(sim, eventTime, eventType) {
+doEvent.spades_ws3_dataInit = function(sim, eventTime, eventType) {
   switch(
     eventType,
     init = {
-      #message("hello world!")  
+      #message("hello world!")
       ### check for more detailed object dependencies:
       ### (use `checkObject` or similar)
 
@@ -55,8 +55,8 @@ doEvent.dataInit = function(sim, eventTime, eventType) {
       sim <- Init(sim)
 
       # schedule future event(s)
-      sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "dataInit", "plot")
-      sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "dataInit", "save")
+      sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "spades_ws3_dataInit", "plot")
+      sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "spades_ws3_dataInit", "save")
     },
     plot = {
       # ! ----- EDIT BELOW ----- ! #
@@ -66,13 +66,13 @@ doEvent.dataInit = function(sim, eventTime, eventType) {
       # schedule future event(s)
 
       # e.g.,
-      #sim <- scheduleEvent(sim, time(sim) + P(sim)$.plotInterval, "dataInit", "plot")
+      #sim <- scheduleEvent(sim, time(sim) + P(sim)$.plotInterval, "spades_ws3_dataInit", "plot")
 
       # ! ----- STOP EDITING ----- ! #
     },
     save = {
       sim <- Save(sim)
-      sim <- scheduleEvent(sim, time(sim) + P(sim)$.saveInterval, "dataInit", "save")
+      sim <- scheduleEvent(sim, time(sim) + P(sim)$.saveInterval, "spades_ws3_dataInit", "save")
     },
     event1 = {
       # ! ----- EDIT BELOW ----- ! #
@@ -84,7 +84,7 @@ doEvent.dataInit = function(sim, eventTime, eventType) {
       # schedule future event(s)
 
       # e.g.,
-      # sim <- scheduleEvent(sim, time(sim) + increment, "dataInit", "templateEvent")
+      # sim <- scheduleEvent(sim, time(sim) + increment, "spades_ws3_dataInit", "templateEvent")
 
       # ! ----- STOP EDITING ----- ! #
     },
@@ -98,7 +98,7 @@ doEvent.dataInit = function(sim, eventTime, eventType) {
       # schedule future event(s)
 
       # e.g.,
-      # sim <- scheduleEvent(sim, time(sim) + increment, "dataInit", "templateEvent")
+      # sim <- scheduleEvent(sim, time(sim) + increment, "spades_ws3_dataInit", "templateEvent")
 
       # ! ----- STOP EDITING ----- ! #
     },
@@ -114,50 +114,50 @@ doEvent.dataInit = function(sim, eventTime, eventType) {
 
 ### template sim$ages1ialization
 Init <- function(sim) {
-    library(raster)    
-    py <- import_builtins()
-    pickle <- import("pickle")
-    hdt.list <- sapply(sapply(P(sim, module=currentModule(sim))$basenames,
-                              function(bn) file.path(inputPath(sim),
-                                                     P(sim, module=currentModule(sim))$hdtPath,
-                                                     paste(P(sim, module=currentModule(sim))$hdtPrefix, bn, ".pkl", sep=""))),
-                       function(path) return(pickle$load(py$open(path, "rb"))))
-    rs.list <- sapply(sapply(P(sim, module = currentModule(sim))$basenames,
-                       function(bn) file.path(inputPath(sim),
-                                              P(sim, module = currentModule(sim))$tifPath,
-                                              bn,
-                                              "inventory_init.tif")),
-#                                              paste(bn, ".tif", sep=""))),
-                raster::stack)
-    # define a local function that recompiles RasterStack objects (yuck)
-    recompile.rs <- function(name) {
-      #browser()
-      mu.id = as.integer(substr(name, 4, 50))
-      rs <- stack(rs.list[name])
-      df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
-      df$key <- as.double(rownames(df)) # add hashcode (index) as double column
-      df <- df[, c(5, 1, 2, 3, 4)]# reorder so new key column in pos 1
-      rb <- subs(rs[[1]], df, which=2:5) # RasterBrick of substituted values (default compiled as factors... not sure how to avoid this)
-      r.thlb <- deratify(rb, layer=2)
-      r.muid <- raster(rs[[1]])
-      r.muid[!is.na(r.thlb)] <- mu.id
-      r.au <- deratify(rb, layer=3)
-      r.blockid <- (1000000000 * r.muid) + rs[[3]]
-      r.age <- rs[[2]]
-      #r.age <- 10 * rs[[2]] # convert to age unit to years
-      return(stack(r.muid, r.thlb, r.au, r.blockid, r.age))
-    }
+  library(raster)
+  py <- import_builtins()
+  pickle <- import("pickle")
+  hdt.list <- sapply(sapply(P(sim, module=currentModule(sim))$basenames,
+                            function(bn) file.path(inputPath(sim),
+                                                   P(sim, module=currentModule(sim))$hdtPath,
+                                                   paste(P(sim, module=currentModule(sim))$hdtPrefix, bn, ".pkl", sep=""))),
+                     function(path) return(pickle$load(py$open(path, "rb"))))
+  rs.list <- sapply(sapply(P(sim, module = currentModule(sim))$basenames,
+                           function(bn) file.path(inputPath(sim),
+                                                  P(sim, module = currentModule(sim))$tifPath,
+                                                  bn,
+                                                  "inventory_init.tif")),
+                    #                                              paste(bn, ".tif", sep=""))),
+                    raster::stack)
+  # define a local function that recompiles RasterStack objects (yuck)
+  recompile.rs <- function(name) {
     #browser()
-    rs.list <- sapply(names(rs.list), recompile.rs)
-    # prep rs for use as arg in do.call wrapper to raster::mosaic function
-    names(rs.list) <- NULL # else TSA names will be interpreted as arg names by raster::mosaic
-    rs.list$fun <- mean
-    rs.list$na.rm <- TRUE
-    rb <- do.call(mosaic, rs.list)
-    sim$landscape <- raster::stack(rb)
-    names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
-    sim$hdt <- hdt.list
-    return(invisible(sim))
+    mu.id = as.integer(substr(name, 4, 50))
+    rs <- stack(rs.list[name])
+    df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
+    df$key <- as.double(rownames(df)) # add hashcode (index) as double column
+    df <- df[, c(5, 1, 2, 3, 4)]# reorder so new key column in pos 1
+    rb <- subs(rs[[1]], df, which=2:5) # RasterBrick of substituted values (default compiled as factors... not sure how to avoid this)
+    r.thlb <- deratify(rb, layer=2)
+    r.muid <- raster(rs[[1]])
+    r.muid[!is.na(r.thlb)] <- mu.id
+    r.au <- deratify(rb, layer=3)
+    r.blockid <- (1000000000 * r.muid) + rs[[3]]
+    r.age <- rs[[2]]
+    #r.age <- 10 * rs[[2]] # convert to age unit to years
+    return(stack(r.muid, r.thlb, r.au, r.blockid, r.age))
+  }
+  #browser()
+  rs.list <- sapply(names(rs.list), recompile.rs)
+  # prep rs for use as arg in do.call wrapper to raster::mosaic function
+  names(rs.list) <- NULL # else TSA names will be interpreted as arg names by raster::mosaic
+  rs.list$fun <- mean
+  rs.list$na.rm <- TRUE
+  rb <- do.call(mosaic, rs.list)
+  sim$landscape <- raster::stack(rb)
+  names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
+  sim$hdt <- hdt.list
+  return(invisible(sim))
 }
 
 ### template for save events
