@@ -4,17 +4,17 @@ library(dplyr)
 # to all modules. Functions can be used without sim$ as they are namespaced, like functions
 # in R packages. If exact location is required, functions will be: sim$<moduleName>$FunctionName
 defineModule(sim, list(
-  name = "dataInit",
+  name = "spades_ws3_dataInit",
   description = NA, #"insert module description here",
   keywords = NA, # c("insert key words here"),
   authors = c(person(c("First", "Middle"), "Last", email = "email@example.com", role = c("aut", "cre"))),
   childModules = character(0),
-  version = list(SpaDES.core = "0.2.5.9000", dataInit = "0.0.1"),
+  version = list(SpaDES.core = "0.2.5.9000", spades_ws3_dataInit = "0.0.1"),
   spatialExtent = raster::extent(rep(NA_real_, 4)),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
-  documentation = list("README.txt", "dataInit.Rmd"),
+  documentation = list("README.txt", "spades_ws3_dataInit.Rmd"),
   reqdPkgs = list("reticulate", "raster"),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
@@ -43,7 +43,7 @@ defineModule(sim, list(
 ## event types
 #   - type `init` is required for initialization
 
-doEvent.dataInit = function(sim, eventTime, eventType) {
+doEvent.spades_ws3_dataInit = function(sim, eventTime, eventType) {
   switch(
     eventType,
     init = {
@@ -55,8 +55,8 @@ doEvent.dataInit = function(sim, eventTime, eventType) {
       sim <- Init(sim)
 
       # schedule future event(s)
-      sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "dataInit", "plot")
-      sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "dataInit", "save")
+      sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "spades_ws3_dataInit", "plot")
+      sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "spades_ws3_dataInit", "save")
     },
     plot = {
       # ! ----- EDIT BELOW ----- ! #
@@ -66,13 +66,13 @@ doEvent.dataInit = function(sim, eventTime, eventType) {
       # schedule future event(s)
 
       # e.g.,
-      #sim <- scheduleEvent(sim, time(sim) + P(sim)$.plotInterval, "dataInit", "plot")
+      #sim <- scheduleEvent(sim, time(sim) + P(sim)$.plotInterval, "spades_ws3_dataInit", "plot")
 
       # ! ----- STOP EDITING ----- ! #
     },
     save = {
       sim <- Save(sim)
-      sim <- scheduleEvent(sim, time(sim) + P(sim)$.saveInterval, "dataInit", "save")
+      sim <- scheduleEvent(sim, time(sim) + P(sim)$.saveInterval, "spades_ws3_dataInit", "save")
     },
     event1 = {
       # ! ----- EDIT BELOW ----- ! #
@@ -84,7 +84,7 @@ doEvent.dataInit = function(sim, eventTime, eventType) {
       # schedule future event(s)
 
       # e.g.,
-      # sim <- scheduleEvent(sim, time(sim) + increment, "dataInit", "templateEvent")
+      # sim <- scheduleEvent(sim, time(sim) + increment, "spades_ws3_dataInit", "templateEvent")
 
       # ! ----- STOP EDITING ----- ! #
     },
@@ -98,7 +98,7 @@ doEvent.dataInit = function(sim, eventTime, eventType) {
       # schedule future event(s)
 
       # e.g.,
-      # sim <- scheduleEvent(sim, time(sim) + increment, "dataInit", "templateEvent")
+      # sim <- scheduleEvent(sim, time(sim) + increment, "spades_ws3_dataInit", "templateEvent")
 
       # ! ----- STOP EDITING ----- ! #
     },
