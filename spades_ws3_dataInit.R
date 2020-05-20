@@ -125,6 +125,7 @@ Init <- function(sim) {
    lapply(., FUN = function(path) {
      pklPath <- (pickle$load(py$open(path, "rb")))
     })
+  names(hdt.list) <- P(sim)$basenames
 
   rs.list <- lapply(P(sim)$basenames, function(bn) {
     file.path(inputPath(sim), P(sim)$tifPath, bn, "inventory_init.tif")
@@ -132,16 +133,8 @@ Init <- function(sim) {
    lapply(., raster::stack)
   names(rs.list) <- P(sim)$basenames
 
-  if (length(P(sim)$basenames) == 1) {
-    hdt.list = list(hdt.list)
-    names(hdt.list) <- P(sim)$basenames
-  } else {
-    names(hdt.list) <- P(sim)$basenames
-  }
-
   # define a local function that recompiles RasterStack objects (yuck)
   recompile.rs <- function(name, rsList = rs.list) {
-    browser()
     mu.id = as.integer(substr(name, 4, 50))
     rs <- stack(rs.list[name])
     df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
@@ -157,14 +150,19 @@ Init <- function(sim) {
     #r.age <- 10 * rs[[2]] # convert to age unit to years
     return(stack(r.muid, r.thlb, r.au, r.blockid, r.age))
   }
-  browser()
   rs.list <- lapply(names(rs.list), recompile.rs)
   # prep rs for use as arg in do.call wrapper to raster::mosaic function
   names(rs.list) <- NULL # else TSA names will be interpreted as arg names by raster::mosaic
-  rs.list$fun <- mean
-  rs.list$na.rm <- TRUE
-  rb <- do.call(mosaic, rs.list)
-  sim$landscape <- raster::stack(rb)
+
+  if (length(P(sim)$basenames) > 1) {
+    rs.list$fun <- mean
+    rs.list$na.rm <- TRUE
+    rb <- do.call(mosaic, rs.list)
+    sim$landscape <- raster::stack(rb)
+  } else {
+    sim$landscape <- raster::stack(rs.list)
+  }
+
   names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
   sim$hdt <- hdt.list
   return(invisible(sim))
