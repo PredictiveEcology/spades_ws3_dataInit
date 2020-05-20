@@ -141,15 +141,13 @@ Init <- function(sim) {
 
   # define a local function that recompiles RasterStack objects (yuck)
   recompile.rs <- function(name, rsList = rs.list) {
-     browser()
+    browser()
     mu.id = as.integer(substr(name, 4, 50))
-    rs <- rsList[[name]] #Ian added second brackets to subset as stack, not list
-    df <- as.data.frame(rbindlist(hdt.list[[name]])) # attributes as data.frame
-    df[names(df)] <- lapply(df[names(df)], factor) #make factor
+    rs <- stack(rs.list[name])
+    df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
     df$key <- as.double(rownames(df)) # add hashcode (index) as double column
-
     df <- df[, c(5, 1, 2, 3, 4)]# reorder so new key column in pos 1
-    rb <- subs(rs[[1]], df, which=2) # RasterBrick of substituted values (default compiled as factors... not sure how to avoid this)
+    rb <- subs(rs[[1]], df, which=2:5) # RasterBrick of substituted values (default compiled as factors... not sure how to avoid this)
     r.thlb <- deratify(rb, layer=2)
     r.muid <- raster(rs[[1]])
     r.muid[!is.na(r.thlb)] <- mu.id
