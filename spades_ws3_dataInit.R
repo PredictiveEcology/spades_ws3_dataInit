@@ -114,6 +114,7 @@ doEvent.spades_ws3_dataInit = function(sim, eventTime, eventType) {
 
 ### template sim$ages1ialization
 Init <- function(sim) {
+  #browser()
   library(raster)
   py <- import_builtins()
   pickle <- import("pickle")
@@ -146,10 +147,15 @@ Init <- function(sim) {
     r.muid[!is.na(r.thlb)] <- mu.id
     r.au <- deratify(rb, layer=3)
     r.blockid <- (1000000000 * r.muid) + rs[[3]]
-    r.age <- rs[[2]]
+    # r.age <- rs[[2]]
+    #Ians temporary solution to stop age from being file-backed
+    ageValues <- getValues(rs[[2]])
+    r.age <- raster(rs[[2]]) %>%
+    setValues(., ageValues)
     #r.age <- 10 * rs[[2]] # convert to age unit to years
     return(stack(r.muid, r.thlb, r.au, r.blockid, r.age))
   }
+
   rs.list <- lapply(names(rs.list), recompile.rs)
   # prep rs for use as arg in do.call wrapper to raster::mosaic function
   names(rs.list) <- NULL # else TSA names will be interpreted as arg names by raster::mosaic
