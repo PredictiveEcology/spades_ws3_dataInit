@@ -14,7 +14,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "spades_ws3_dataInit.Rmd"),
-  reqdPkgs = list("reticulate", "raster", 'dplyr'),
+  reqdPkgs = list("reticulate", "raster", 'dplyr', 'magrittr'),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
     #defineParameter("", NA, NA, NA, ""),
@@ -114,24 +114,28 @@ doEvent.spades_ws3_dataInit = function(sim, eventTime, eventType) {
 
 ### template sim$ages1ialization
 Init <- function(sim) {
+  #browser()
   library(raster)
   py <- import_builtins()
   pickle <- import("pickle")
-  hdt.list <- sapply(sapply(P(sim, module=currentModule(sim))$basenames,
-                            function(bn) file.path(inputPath(sim),
-                                                   P(sim, module=currentModule(sim))$hdtPath,
-                                                   paste(P(sim, module=currentModule(sim))$hdtPrefix, bn, ".pkl", sep=""))),
-                     function(path) return(pickle$load(py$open(path, "rb"))))
-  rs.list <- sapply(sapply(P(sim, module = currentModule(sim))$basenames,
-                           function(bn) file.path(inputPath(sim),
-                                                  P(sim, module = currentModule(sim))$tifPath,
-                                                  bn,
-                                                  "inventory_init.tif")),
-                    #                                              paste(bn, ".tif", sep=""))),
-                    raster::stack)
+  hdt.list <- lapply(P(sim)$basenames, function(bn, input = inputPath(sim),
+                                                hdtPath = P(sim)$hdtPath,
+                                                hdtPrefix = P(sim)$hdtPrefix) {
+    pklPath <- file.path(input, hdtPath, paste0(hdtPrefix, bn, ".pkl"))
+  }) %>%
+   lapply(., FUN = function(path) {
+     pklPath <- (pickle$load(py$open(path, "rb")))
+    })
+  names(hdt.list) <- P(sim)$basenames
+
+  rs.list <- lapply(P(sim)$basenames, function(bn) {
+    file.path(inputPath(sim), P(sim)$tifPath, bn, "inventory_init.tif")
+  }) %>%
+   lapply(., raster::stack)
+  names(rs.list) <- P(sim)$basenames
+
   # define a local function that recompiles RasterStack objects (yuck)
-  recompile.rs <- function(name) {
-    #browser()
+  recompile.rs <- function(name, rsList = rs.list) {
     mu.id = as.integer(substr(name, 4, 50))
     rs <- stack(rs.list[name])
     df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
@@ -143,18 +147,28 @@ Init <- function(sim) {
     r.muid[!is.na(r.thlb)] <- mu.id
     r.au <- deratify(rb, layer=3)
     r.blockid <- (1000000000 * r.muid) + rs[[3]]
-    r.age <- rs[[2]]
+    # r.age <- rs[[2]]
+    #Ians temporary solution to stop age from being file-backed
+    ageValues <- getValues(rs[[2]])
+    r.age <- raster(rs[[2]]) %>%
+    setValues(., ageValues)
     #r.age <- 10 * rs[[2]] # convert to age unit to years
     return(stack(r.muid, r.thlb, r.au, r.blockid, r.age))
   }
-  #browser()
-  rs.list <- sapply(names(rs.list), recompile.rs)
+
+  rs.list <- lapply(names(rs.list), recompile.rs)
   # prep rs for use as arg in do.call wrapper to raster::mosaic function
   names(rs.list) <- NULL # else TSA names will be interpreted as arg names by raster::mosaic
-  rs.list$fun <- mean
-  rs.list$na.rm <- TRUE
-  rb <- do.call(mosaic, rs.list)
-  sim$landscape <- raster::stack(rb)
+
+  if (length(P(sim)$basenames) > 1) {
+    rs.list$fun <- mean
+    rs.list$na.rm <- TRUE
+    rb <- do.call(mosaic, rs.list)
+    sim$landscape <- raster::stack(rb)
+  } else {
+    sim$landscape <- raster::stack(rs.list)
+  }
+
   names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
   sim$hdt <- hdt.list
   return(invisible(sim))
