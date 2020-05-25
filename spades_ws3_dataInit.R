@@ -141,7 +141,8 @@ Init <- function(sim) {
     df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
     df$key <- as.double(rownames(df)) # add hashcode (index) as double column
     df <- df[, c(5, 1, 2, 3, 4)]# reorder so new key column in pos 1
-    rb <- subs(rs[[1]], df, which=2:5) # RasterBrick of substituted values (default compiled as factors... not sure how to avoid this)
+    #Need raster:: or it collides with pryr::subs
+    rb <- raster::subs(rs[[1]], df, which=2:5) # RasterBrick of substituted values (default compiled as factors... not sure how to avoid this)
     r.thlb <- deratify(rb, layer=2)
     r.muid <- raster(rs[[1]])
     r.muid[!is.na(r.thlb)] <- mu.id
@@ -149,6 +150,7 @@ Init <- function(sim) {
     r.blockid <- (1000000000 * r.muid) + rs[[3]]
     # r.age <- rs[[2]]
     #Ians temporary solution to stop age from being file-backed
+    #browser()
     ageValues <- getValues(rs[[2]])
     r.age <- raster(rs[[2]]) %>%
     setValues(., ageValues)
