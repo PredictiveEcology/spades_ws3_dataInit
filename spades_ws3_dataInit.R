@@ -18,7 +18,8 @@ defineModule(sim, list(
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
     #defineParameter("", NA, NA, NA, ""),
-    defineParameter("basenames", "character", NA, NA, NA, "MU baseneames to load"),
+    defineParameter("basenames", "character", NA, NA, NA,
+                    desc = 'vector of MU baseneames to load, beginning with tsa, e.g. "tsa40"'),
     defineParameter("base.year", 'numeric', 2015, NA, NA, "base year of forest inventory data"),
     defineParameter("tifPath", "character", "tif", NA, NA, "Path to TIF raster inventory files"),
     defineParameter("hdtPath", "character", "hdt", NA, NA, "Path to pickled hdt files"),
@@ -59,48 +60,11 @@ doEvent.spades_ws3_dataInit = function(sim, eventTime, eventType) {
       sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "spades_ws3_dataInit", "save")
     },
     plot = {
-      # ! ----- EDIT BELOW ----- ! #
-      # do stuff for this event
-
-      #plotFun(sim) # uncomment this, replace with object to plot
-      # schedule future event(s)
-
-      # e.g.,
-      #sim <- scheduleEvent(sim, time(sim) + P(sim)$.plotInterval, "spades_ws3_dataInit", "plot")
-
-      # ! ----- STOP EDITING ----- ! #
+      #define plot event
     },
     save = {
       sim <- Save(sim)
       sim <- scheduleEvent(sim, time(sim) + P(sim)$.saveInterval, "spades_ws3_dataInit", "save")
-    },
-    event1 = {
-      # ! ----- EDIT BELOW ----- ! #
-      # do stuff for this event
-
-      # e.g., call your custom functions/methods here
-      # you can define your own methods below this `doEvent` function
-
-      # schedule future event(s)
-
-      # e.g.,
-      # sim <- scheduleEvent(sim, time(sim) + increment, "spades_ws3_dataInit", "templateEvent")
-
-      # ! ----- STOP EDITING ----- ! #
-    },
-    event2 = {
-      # ! ----- EDIT BELOW ----- ! #
-      # do stuff for this event
-
-      # e.g., call your custom functions/methods here
-      # you can define your own methods below this `doEvent` function
-
-      # schedule future event(s)
-
-      # e.g.,
-      # sim <- scheduleEvent(sim, time(sim) + increment, "spades_ws3_dataInit", "templateEvent")
-
-      # ! ----- STOP EDITING ----- ! #
     },
     warning(paste("Undefined event type: '", current(sim)[1, "eventType", with = FALSE],
                   "' in module '", current(sim)[1, "moduleName", with = FALSE], "'", sep = ""))
@@ -114,6 +78,14 @@ doEvent.spades_ws3_dataInit = function(sim, eventTime, eventType) {
 
 ### template sim$ages1ialization
 Init <- function(sim) {
+
+  if (is.null(P(sim)$basenames)) {
+    stop(paste("please supply TSAs to basenames param in", currentModule(sim)))
+  }
+  # workaround for reticulate problem with list conversion
+  if (length(P(sim)$basenames) == 1 & class(P(sim)$basenames) == 'character') {
+    sim@params$spades_ws3_dataInit$basenames <- as.list(P(sim)$basenames)
+  }
 
   py <- import_builtins()
   pickle <- import("pickle")
