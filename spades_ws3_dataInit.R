@@ -114,10 +114,10 @@ doEvent.spades_ws3_dataInit = function(sim, eventTime, eventType) {
 
 ### template sim$ages1ialization
 Init <- function(sim) {
-  #browser()
-  library(raster)
+
   py <- import_builtins()
   pickle <- import("pickle")
+
   hdt.list <- lapply(P(sim)$basenames, function(bn, input = inputPath(sim),
                                                 hdtPath = P(sim)$hdtPath,
                                                 hdtPrefix = P(sim)$hdtPrefix) {
