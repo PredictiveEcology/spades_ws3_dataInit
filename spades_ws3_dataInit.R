@@ -131,7 +131,7 @@ Init <- function(sim) {
                 raster::stack)
     # define a local function that recompiles RasterStack objects (yuck)
     recompile.rs <- function(name) {
-      #browser()
+      browser()
       mu.id = as.integer(substr(name, 4, 50))
       rs <- stack(rs.list[name])
       df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
@@ -157,6 +157,7 @@ Init <- function(sim) {
     sim$landscape <- raster::stack(rb)
     names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
     sim$hdt <- hdt.list
+    #browser()
     return(invisible(sim))
 }
 
