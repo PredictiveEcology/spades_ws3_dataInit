@@ -56,6 +56,7 @@ doEvent.spades_ws3_dataInit = function(sim, eventTime, eventType) {
 ## event functions
 
 Init <- function(sim) {
+  #browser()
   library(raster)    
   py <- import_builtins()
   pickle <- import("pickle")
