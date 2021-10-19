@@ -1,5 +1,3 @@
-# YAML 1.2
----
 authors: 
   -
     family-names: Paradis
@@ -12,4 +10,4 @@ license: MIT
 message: "If you use this software, please cite it using these metadata."
 repository-code: "https://github.com/gparadis/spades_ws3_dataInit"
 version: "1.0.0-alpha"
-...
+
