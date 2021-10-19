@@ -9,3 +9,4 @@ version: 1.0.0-alpha
 date-released: 2021-11-01
 license: MIT
 repository-code: https://github.com/gparadis/spades_ws3_dataInit
+doi: https://doi.org/10.5281/zenodo.5579748
