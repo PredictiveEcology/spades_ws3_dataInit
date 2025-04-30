@@ -56,12 +56,10 @@ doEvent.spades_ws3_dataInit = function(sim, eventTime, eventType) {
 ## event functions
 
 Init <- function(sim) {
-  #browser()
-  library(raster)    
   py <- import_builtins()
   pickle <- import("pickle")
-  hdt.list <- lapply(P(sim)$basenames, 
-                     function(bn, 
+  hdt.list <- lapply(P(sim)$basenames,
+                     function(bn,
                               input = inputPath(sim),
                               hdtPath = P(sim)$hdtPath,
                               hdtPrefix = P(sim)$hdtPrefix) {
@@ -70,7 +68,7 @@ Init <- function(sim) {
                ) %>%
                lapply(., FUN = function(path) {pklPath <- (pickle$load(py$open(path, "rb")))})
   names(hdt.list) <- P(sim)$basenames
-  rs.list <- lapply(P(sim)$basenames, 
+  rs.list <- lapply(P(sim)$basenames,
                     function(bn) {
                       file.path(inputPath(sim), P(sim)$tifPath, bn, "inventory_init.tif")
                     }
@@ -79,13 +77,13 @@ Init <- function(sim) {
   names(rs.list) <- P(sim)$basenames
   recompile.rs <- function(name, rsList = rs.list) {
     mu.id = as.integer(substr(name, 4, 50))
-    rs <- stack(rs.list[name])
+    rs <- raster::stack(rs.list[name])
     df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
     df$key <- as.double(rownames(df)) # add hashcode (index) as double column
     df <- df[, c(5, 1, 2, 3, 4)]# reorder so new key column in pos 1
     #Need raster:: or it collides with pryr::subs
     # RasterBrick of substituted values (default compiled as factors... not sure how to avoid this)
-    rb <- raster::subs(rs[[1]], df, which=2:5) 
+    rb <- raster::subs(rs[[1]], df, which=2:5)
     r.thlb <- deratify(rb, layer=2)
     r.muid <- raster(rs[[1]])
     r.muid[!is.na(r.thlb)] <- mu.id
@@ -97,7 +95,7 @@ Init <- function(sim) {
     ageValues <- getValues(rs[[2]])
     r.age <- raster(rs[[2]]) %>% setValues(., ageValues)
     ###############################################################
-    return(stack(r.muid, r.thlb, r.au, r.blockid, r.age))
+    return(raster::stack(r.muid, r.thlb, r.au, r.blockid, r.age))
   }
   rs.list <- lapply(names(rs.list), recompile.rs)
   # prep rs for use as arg in do.call wrapper to raster::mosaic function
