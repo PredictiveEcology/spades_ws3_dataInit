@@ -126,6 +126,15 @@ plotFun <- function(sim) {
 
 
 .inputObjects <- function(sim) {
+  browser()
+  if (!file.exists(file.path(inputPath(sim), Par$tifPath))) {
+    dataTarGz <- "/srv/shared-data/cccandies-demo-202503-input.tar.gz"
+    if (!dir.exists(dirname(dataTarGz)))
+      stop("This module currently only works with untarred data from:\n", basename(dataTarGz))
+    localTarGz <- file.path(inputPath(sim), basename(dataTarGz))
+    file.copy(dataTarGz, localTarGz)
+    untar(localTarGz, exdir = dirname(inputPath(sim)))
+  }
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
   return(invisible(sim))
