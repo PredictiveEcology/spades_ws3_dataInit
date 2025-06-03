@@ -5,7 +5,6 @@ defineModule(sim, list(
   authors = c(person(c("First", "Middle"), "Last", email = "email@example.com", role = c("aut", "cre"))),
   childModules = character(0),
   version = list(SpaDES.core = "0.2.5.9000", spades_ws3_dataInit = "0.0.1"),
-  spatialExtent = raster::extent(rep(NA_real_, 4)),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -57,7 +56,34 @@ doEvent.spades_ws3_dataInit = function(sim, eventTime, eventType) {
 
 Init <- function(sim) {
 
-  if (!suppliedElsewhere("hdt")) {
+
+}
+
+
+Save <- function(sim) {
+  sim <- saveFiles(sim)
+  return(invisible(sim))
+}
+
+
+plotFun <- function(sim) {
+  return(invisible(sim))
+}
+
+
+.inputObjects <- function(sim) {
+  if (!file.exists(file.path(inputPath(sim), Par$tifPath))) {
+    dataTarGz <- "/srv/shared-data/cccandies-demo-202503-input.tar.gz"
+    if (!dir.exists(dirname(dataTarGz)))
+      stop("This module currently only works with untarred data from:\n", basename(dataTarGz))
+    localTarGz <- file.path(inputPath(sim), basename(dataTarGz))
+    file.copy(dataTarGz, localTarGz)
+    untar(localTarGz, exdir = dirname(inputPath(sim)))
+  }
+  dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
+  message(currentModule(sim), ": using dataPath '", dPath, "'.")
+
+  if (!suppliedElsewhere("hdt", sim)) {
     py <- import_builtins()
     pickle <- import("pickle")
     hdt.list <- lapply(P(sim)$basenames,
@@ -70,6 +96,10 @@ Init <- function(sim) {
     ) %>%
       lapply(., FUN = function(path) {pklPath <- (pickle$load(py$open(path, "rb")))})
     names(hdt.list) <- P(sim)$basenames
+    sim$hdt <- hdt.list
+  }
+
+  if (!suppliedElsewhere("landscape", sim)) {
     rs.list <- lapply(P(sim)$basenames,
                       function(bn) {
                         file.path(inputPath(sim), P(sim)$tifPath, bn, "inventory_init.tif")
@@ -83,7 +113,7 @@ Init <- function(sim) {
       df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
       df$key <- as.double(rownames(df)) # add hashcode (index) as double column
       df <- df[, c(5, 1, 2, 3, 4)]# reorder so new key column in pos 1
-      #Need raster:: or it collides with pryr::subs
+      #Need raster or it collides with pryr::subs
       # RasterBrick of substituted values (default compiled as factors... not sure how to avoid this)
       rb <- raster::subs(rs[[1]], df, which=2:5)
       r.thlb <- deratify(rb, layer=2)
@@ -111,34 +141,6 @@ Init <- function(sim) {
       sim$landscape <- raster::stack(rs.list)
     }
     names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
-    sim$hdt <- hdt.list
   }
-
-  return(invisible(sim))
-}
-
-
-Save <- function(sim) {
-  sim <- saveFiles(sim)
-  return(invisible(sim))
-}
-
-
-plotFun <- function(sim) {
-  return(invisible(sim))
-}
-
-
-.inputObjects <- function(sim) {
-  if (!file.exists(file.path(inputPath(sim), Par$tifPath))) {
-    dataTarGz <- "/srv/shared-data/cccandies-demo-202503-input.tar.gz"
-    if (!dir.exists(dirname(dataTarGz)))
-      stop("This module currently only works with untarred data from:\n", basename(dataTarGz))
-    localTarGz <- file.path(inputPath(sim), basename(dataTarGz))
-    file.copy(dataTarGz, localTarGz)
-    untar(localTarGz, exdir = dirname(inputPath(sim)))
-  }
-  dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
-  message(currentModule(sim), ": using dataPath '", dPath, "'.")
   return(invisible(sim))
 }
