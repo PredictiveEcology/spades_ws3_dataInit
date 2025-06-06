@@ -23,7 +23,7 @@ defineModule(sim, list(
     defineParameter(".useCache", "logical", FALSE, NA, NA, "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant")
   ),
   inputObjects = bind_rows(
-    expectsInput(objectName = NA, objectClass = NA, desc = NA, sourceURL = NA)
+    expectsInput(objectName = "studyArea", objectClass = "SpatVector", desc = "study area in BC - made of TSAs", sourceURL = NA)
   ),
   outputObjects = bind_rows(
     createsOutput(objectName = "landscape", objectClass = "RasterStack", desc = "landscape layers"),
@@ -56,7 +56,7 @@ doEvent.spades_ws3_dataInit = function(sim, eventTime, eventType) {
 
 Init <- function(sim) {
 
-
+  return(invisible(sim))
 }
 
 
@@ -72,6 +72,10 @@ plotFun <- function(sim) {
 
 
 .inputObjects <- function(sim) {
+
+  dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
+  message(currentModule(sim), ": using dataPath '", dPath, "'.")
+
   if (!file.exists(file.path(inputPath(sim), Par$tifPath))) {
     dataTarGz <- "/srv/shared-data/cccandies-demo-202503-input.tar.gz"
     if (!dir.exists(dirname(dataTarGz)))
@@ -80,8 +84,7 @@ plotFun <- function(sim) {
     file.copy(dataTarGz, localTarGz)
     untar(localTarGz, exdir = dirname(inputPath(sim)))
   }
-  dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
-  message(currentModule(sim), ": using dataPath '", dPath, "'.")
+
 
   if (!suppliedElsewhere("hdt", sim)) {
     py <- import_builtins()
@@ -142,5 +145,20 @@ plotFun <- function(sim) {
     }
     names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
   }
+
+  if (!suppliedElsewhere("studyArea", sim)) {
+    #TODO: use the bcdata package instead of this googledrive file
+    tsas <- prepInputs(url = "https://drive.google.com/file/d/1niq3Ms7mCPsnbRhbSqzThPUA0-Xfifmz/view?usp=drive_link",
+                       destinationPath = dPath,
+                       projectTo = sim$landscape,
+                       fun = "terra::vect")
+    tsas$charTSA <- paste0("tsa", tsas$TSA_NUMBER)
+    tsas <- tsas[tsas$charTSA %in% unlist(P(sim)$basenames),]
+    tsas$foo <- 1
+    #study area must be a single polygon
+    tsas <- aggregate(tsas, field = "foo", fun = mean)
+    sim$studyArea <- tsas
+  }
+
   return(invisible(sim))
 }
