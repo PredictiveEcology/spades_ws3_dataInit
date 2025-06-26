@@ -160,5 +160,33 @@ plotFun <- function(sim) {
     sim$studyArea <- tsas
   }
 
+  #Python
+  #TODO: make this a function
+  needed <- c("numpy", "pandas", "scipy", "rasterio", "fiona", "profilehooks",
+              "geopandas", "matplotlib", "seaborn", "folium", "datalad-installer")
+  # reticulate::virtualenv_create(
+  #   ".venv",
+  #   python = if (!reticulate::virtualenv_exists(".venv")){
+  #     CBMutils::ReticulateFindPython(version = ">=3.9,<=3.12.7", versionInstall = "3.10:latest")
+  #   },
+  #   packages = needed)
+  #
+  # # Use Python virtual environment
+  # reticulate::use_virtualenv(file.path(dirname(modulePath(sim)), ".venv"))
+
+  if (!dir.exists(".venv"))
+    system("python -m venv .venv")
+
+  pp <- py_list_packages()
+  if (!all(needed %in% pp$package)) {
+    py_install(needed)
+  }
+
+  if (isFALSE(py_module_available("ws3"))) {
+    reticulate::py_install(
+      packages = "git+https://github.com/UBC-FRESH/ws3.git",
+      method = "pip"
+    )
+  }
   return(invisible(sim))
 }
