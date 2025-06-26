@@ -9,7 +9,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "spades_ws3_dataInit.Rmd"),
-  reqdPkgs = list("reticulate", "raster", 'dplyr', 'magrittr'),
+  reqdPkgs = list("reticulate", "raster", 'dplyr', 'magrittr', 'googledrive'),
   parameters = rbind(
     defineParameter("basenames", "character", NA, NA, NA,'vector of MU baseneames to load, beginning with tsa, e.g. "tsa40"'),
     defineParameter("base.year", 'numeric', 2015, NA, NA, "base year of forest inventory data"),
