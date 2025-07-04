@@ -5,12 +5,11 @@ defineModule(sim, list(
   authors = c(person(c("First", "Middle"), "Last", email = "email@example.com", role = c("aut", "cre"))),
   childModules = character(0),
   version = list(SpaDES.core = "0.2.5.9000", spades_ws3_dataInit = "0.0.1"),
-  spatialExtent = raster::extent(rep(NA_real_, 4)),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "spades_ws3_dataInit.Rmd"),
-  reqdPkgs = list("reticulate", "raster", 'dplyr', 'magrittr'),
+  reqdPkgs = list("reticulate", "raster", 'dplyr', 'magrittr', 'googledrive'),
   parameters = rbind(
     defineParameter("basenames", "character", NA, NA, NA,'vector of MU baseneames to load, beginning with tsa, e.g. "tsa40"'),
     defineParameter("base.year", 'numeric', 2015, NA, NA, "base year of forest inventory data"),
@@ -24,7 +23,7 @@ defineModule(sim, list(
     defineParameter(".useCache", "logical", FALSE, NA, NA, "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant")
   ),
   inputObjects = bind_rows(
-    expectsInput(objectName = NA, objectClass = NA, desc = NA, sourceURL = NA)
+    expectsInput(objectName = "studyArea", objectClass = "SpatVector", desc = "study area in BC - made of TSAs", sourceURL = NA)
   ),
   outputObjects = bind_rows(
     createsOutput(objectName = "landscape", objectClass = "RasterStack", desc = "landscape layers"),
@@ -56,62 +55,7 @@ doEvent.spades_ws3_dataInit = function(sim, eventTime, eventType) {
 ## event functions
 
 Init <- function(sim) {
-  #browser()
-  library(raster)    
-  py <- import_builtins()
-  pickle <- import("pickle")
-  hdt.list <- lapply(P(sim)$basenames, 
-                     function(bn, 
-                              input = inputPath(sim),
-                              hdtPath = P(sim)$hdtPath,
-                              hdtPrefix = P(sim)$hdtPrefix) {
-                       pklPath <- file.path(input, hdtPath, paste0(hdtPrefix, bn, ".pkl"))
-                     }
-               ) %>%
-               lapply(., FUN = function(path) {pklPath <- (pickle$load(py$open(path, "rb")))})
-  names(hdt.list) <- P(sim)$basenames
-  rs.list <- lapply(P(sim)$basenames, 
-                    function(bn) {
-                      file.path(inputPath(sim), P(sim)$tifPath, bn, "inventory_init.tif")
-                    }
-             ) %>%
-             lapply(., raster::stack)
-  names(rs.list) <- P(sim)$basenames
-  recompile.rs <- function(name, rsList = rs.list) {
-    mu.id = as.integer(substr(name, 4, 50))
-    rs <- stack(rs.list[name])
-    df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
-    df$key <- as.double(rownames(df)) # add hashcode (index) as double column
-    df <- df[, c(5, 1, 2, 3, 4)]# reorder so new key column in pos 1
-    #Need raster:: or it collides with pryr::subs
-    # RasterBrick of substituted values (default compiled as factors... not sure how to avoid this)
-    rb <- raster::subs(rs[[1]], df, which=2:5) 
-    r.thlb <- deratify(rb, layer=2)
-    r.muid <- raster(rs[[1]])
-    r.muid[!is.na(r.thlb)] <- mu.id
-    r.au <- deratify(rb, layer=3)
-    r.blockid <- (1000000000 * r.muid) + rs[[3]]
-    # r.age <- rs[[2]]
-    ###############################################################
-    # temporary solution to stop age from being file-backed
-    ageValues <- getValues(rs[[2]])
-    r.age <- raster(rs[[2]]) %>% setValues(., ageValues)
-    ###############################################################
-    return(stack(r.muid, r.thlb, r.au, r.blockid, r.age))
-  }
-  rs.list <- lapply(names(rs.list), recompile.rs)
-  # prep rs for use as arg in do.call wrapper to raster::mosaic function
-  names(rs.list) <- NULL # else TSA names will be interpreted as arg names by raster::mosaic
-  if (length(P(sim)$basenames) > 1) {
-    rs.list$fun <- mean
-    rs.list$na.rm <- TRUE
-    rb <- do.call(mosaic, rs.list)
-    sim$landscape <- raster::stack(rb)
-  } else {
-    sim$landscape <- raster::stack(rs.list)
-  }
-  names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
-  sim$hdt <- hdt.list
+
   return(invisible(sim))
 }
 
@@ -128,7 +72,123 @@ plotFun <- function(sim) {
 
 
 .inputObjects <- function(sim) {
+
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
+
+  #Python
+  #TODO: make this a function
+  needed <- c("numpy", "pandas", "scipy", "rasterio", "fiona", "profilehooks",
+              "geopandas", "matplotlib", "seaborn", "folium", "datalad-installer")
+  # reticulate::virtualenv_create(
+  #   ".venv",
+  #   python = if (!reticulate::virtualenv_exists(".venv")){
+  #     CBMutils::ReticulateFindPython(version = ">=3.9,<=3.12.7", versionInstall = "3.10:latest")
+  #   },
+  #   packages = needed)
+  #
+  # # Use Python virtual environment
+  # reticulate::use_virtualenv(file.path(dirname(modulePath(sim)), ".venv"))
+
+  if (!dir.exists(".venv"))
+    system("python -m venv .venv")
+
+  pp <- py_list_packages()
+  if (!all(needed %in% pp$package)) {
+    py_install(needed)
+  }
+
+  if (isFALSE(py_module_available("ws3"))) {
+    reticulate::py_install(
+      packages = "git+https://github.com/UBC-FRESH/ws3.git",
+      method = "pip"
+    )
+  }
+
+
+  if (!file.exists(file.path(inputPath(sim), Par$tifPath))) {
+    dataTarGz <- "/srv/shared-data/cccandies-demo-202503-input.tar.gz"
+    if (!dir.exists(dirname(dataTarGz)))
+      stop("This module currently only works with untarred data from:\n", basename(dataTarGz))
+    localTarGz <- file.path(inputPath(sim), basename(dataTarGz))
+    file.copy(dataTarGz, localTarGz)
+    untar(localTarGz, exdir = dirname(inputPath(sim)))
+  }
+
+  if (!suppliedElsewhere("hdt", sim)) {
+    py <- import_builtins()
+    pickle <- import("pickle")
+    hdt.list <- lapply(P(sim)$basenames,
+                       function(bn,
+                                input = inputPath(sim),
+                                hdtPath = P(sim)$hdtPath,
+                                hdtPrefix = P(sim)$hdtPrefix) {
+                         pklPath <- file.path(input, hdtPath, paste0(hdtPrefix, bn, ".pkl"))
+                       }
+    ) %>%
+      lapply(., FUN = function(path) {pklPath <- (pickle$load(py$open(path, "rb")))})
+    names(hdt.list) <- P(sim)$basenames
+    sim$hdt <- hdt.list
+  }
+
+  if (!suppliedElsewhere("landscape", sim)) {
+    rs.list <- lapply(P(sim)$basenames,
+                      function(bn) {
+                        file.path(inputPath(sim), P(sim)$tifPath, bn, "inventory_init.tif")
+                      }
+    ) %>%
+      lapply(., raster::stack)
+    names(rs.list) <- P(sim)$basenames
+    recompile.rs <- function(name, rsList = rs.list) {
+      mu.id = as.integer(substr(name, 4, 50))
+      rs <- raster::stack(rs.list[name])
+      df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
+      df$key <- as.double(rownames(df)) # add hashcode (index) as double column
+      df <- df[, c(5, 1, 2, 3, 4)]# reorder so new key column in pos 1
+      #Need raster or it collides with pryr::subs
+      # RasterBrick of substituted values (default compiled as factors... not sure how to avoid this)
+      rb <- raster::subs(rs[[1]], df, which=2:5)
+      r.thlb <- deratify(rb, layer=2)
+      r.muid <- raster(rs[[1]])
+      r.muid[!is.na(r.thlb)] <- mu.id
+      r.au <- deratify(rb, layer=3)
+      r.blockid <- (1000000000 * r.muid) + rs[[3]]
+      # r.age <- rs[[2]]
+      ###############################################################
+      # temporary solution to stop age from being file-backed
+      ageValues <- getValues(rs[[2]])
+      r.age <- raster(rs[[2]]) %>% setValues(., ageValues)
+      ###############################################################
+      return(raster::stack(r.muid, r.thlb, r.au, r.blockid, r.age))
+    }
+    rs.list <- lapply(names(rs.list), recompile.rs)
+    # prep rs for use as arg in do.call wrapper to raster::mosaic function
+    names(rs.list) <- NULL # else TSA names will be interpreted as arg names by raster::mosaic
+    if (length(P(sim)$basenames) > 1) {
+      rs.list$fun <- mean
+      rs.list$na.rm <- TRUE
+      rb <- do.call(mosaic, rs.list)
+      sim$landscape <- raster::stack(rb)
+    } else {
+      sim$landscape <- raster::stack(rs.list)
+    }
+    names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
+  }
+
+  if (!suppliedElsewhere("studyArea", sim)) {
+    #TODO: use the bcdata package instead of this googledrive file
+    tsas <- prepInputs(url = "https://drive.google.com/file/d/1niq3Ms7mCPsnbRhbSqzThPUA0-Xfifmz/view?usp=drive_link",
+                       destinationPath = dPath,
+                       projectTo = sim$landscape,
+                       fun = "terra::vect")
+    tsas$charTSA <- paste0("tsa", tsas$TSA_NUMBER)
+    tsas <- tsas[tsas$charTSA %in% unlist(P(sim)$basenames),]
+    tsas$foo <- 1
+    #study area must be a single polygon
+    tsas <- aggregate(tsas, field = "foo", fun = mean)
+    sim$studyArea <- tsas
+  }
+
+
   return(invisible(sim))
 }

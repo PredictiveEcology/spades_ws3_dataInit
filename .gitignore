@@ -1,2 +1,9 @@
 *.pyc
 __pycache__
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+data/
+
+cache/
