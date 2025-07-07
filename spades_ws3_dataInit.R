@@ -61,7 +61,7 @@ Init <- function(sim) {
 
 
 Save <- function(sim) {
-  sim <- saveFiles(sim)
+
   return(invisible(sim))
 }
 
