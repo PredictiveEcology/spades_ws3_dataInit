@@ -78,42 +78,25 @@ plotFun <- function(sim) {
 
   #Python
   #TODO: make this a function
-  needed <- c("numpy", "pandas", "scipy", "rasterio", "fiona", "profilehooks",
-              "geopandas", "matplotlib", "seaborn", "folium", "datalad-installer")
-  # reticulate::virtualenv_create(
-  #   ".venv",
-  #   python = if (!reticulate::virtualenv_exists(".venv")){
-  #     CBMutils::ReticulateFindPython(version = ">=3.9,<=3.12.7", versionInstall = "3.10:latest")
-  #   },
-  #   packages = needed)
-  #
-  # # Use Python virtual environment
-  # reticulate::use_virtualenv(file.path(dirname(modulePath(sim)), ".venv"))
-
-  if (!dir.exists(".venv"))
-    system("python -m venv .venv")
-
-  pp <- py_list_packages()
-  if (!all(needed %in% pp$package)) {
-    py_install(needed)
+  needed <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas")
+  if (reticulate::virtualenv_exists("r-reticulate")) {
+    reticulate::py_install(needed)
+  } else {
+    reticulate::virtualenv_create("r-reticulate", packages = needed)
   }
+  reticulate::use_virtualenv("r-reticulate")
+  
+  # make sure that datalad-managed input files have all been downloaded from the cloud
+  system("datalad get input -r")
 
-  if (isFALSE(py_module_available("ws3"))) {
-    reticulate::py_install(
-      packages = "git+https://github.com/UBC-FRESH/ws3.git",
-      method = "pip"
-    )
-  }
-
-
-  if (!file.exists(file.path(inputPath(sim), Par$tifPath))) {
-    dataTarGz <- "/srv/shared-data/cccandies-demo-202503-input.tar.gz"
-    if (!dir.exists(dirname(dataTarGz)))
-      stop("This module currently only works with untarred data from:\n", basename(dataTarGz))
-    localTarGz <- file.path(inputPath(sim), basename(dataTarGz))
-    file.copy(dataTarGz, localTarGz)
-    untar(localTarGz, exdir = dirname(inputPath(sim)))
-  }
+  #if (!file.exists(file.path(inputPath(sim), Par$tifPath))) {
+  #  dataTarGz <- "/srv/shared-data/cccandies-demo-202503-input.tar.gz"
+  #  if (!dir.exists(dirname(dataTarGz)))
+  #    stop("This module currently only works with untarred data from:\n", basename(dataTarGz))
+  #  localTarGz <- file.path(inputPath(sim), basename(dataTarGz))
+  #  file.copy(dataTarGz, localTarGz)
+  #  untar(localTarGz, exdir = dirname(inputPath(sim)))
+  #}
 
   if (!suppliedElsewhere("hdt", sim)) {
     py <- import_builtins()
