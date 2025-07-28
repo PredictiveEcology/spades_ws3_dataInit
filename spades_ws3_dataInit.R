@@ -85,7 +85,7 @@ plotFun <- function(sim) {
     reticulate::virtualenv_create("r-reticulate", packages = needed)
   }
   reticulate::use_virtualenv("r-reticulate")
-  
+
   # make sure that datalad-managed input files have all been downloaded from the cloud
   system("datalad get input -r")
 
@@ -101,6 +101,9 @@ plotFun <- function(sim) {
   if (!suppliedElsewhere("hdt", sim)) {
     py <- import_builtins()
     pickle <- import("pickle")
+    #TODO: explore cloning cccandies_demo_input into a subfolder,
+    # get the data, and then copy it to a folder inside this module
+    # which replaces use of inputPath below
     hdt.list <- lapply(P(sim)$basenames,
                        function(bn,
                                 input = inputPath(sim),
@@ -171,7 +174,6 @@ plotFun <- function(sim) {
     tsas <- aggregate(tsas, field = "foo", fun = mean)
     sim$studyArea <- tsas
   }
-
 
   return(invisible(sim))
 }
