@@ -13,7 +13,7 @@ defineModule(sim, list(
   parameters = rbind(
     defineParameter("basenames", "character", NA, NA, NA,'vector of MU baseneames to load, beginning with tsa, e.g. "tsa40"'),
     defineParameter("base.year", 'numeric', 2015, NA, NA, "base year of forest inventory data"),
-    defineParameter("tifPath", "character", "tif", NA, NA, "Path to TIF raster inventory files"),
+    defineParameter("tif.path", "character", "tif", NA, NA, "Path to TIF raster inventory files"),
     defineParameter("hdtPath", "character", "hdt", NA, NA, "Path to pickled hdt files"),
     defineParameter("hdtPrefix", "character", "hdt_", NA, NA, "HDT filename prefix"),
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first plot event should occur"),
@@ -89,7 +89,7 @@ plotFun <- function(sim) {
   # make sure that datalad-managed input files have all been downloaded from the cloud
   system("datalad get input -r")
 
-  #if (!file.exists(file.path(inputPath(sim), Par$tifPath))) {
+  #if (!file.exists(file.path(inputPath(sim), Par$tif.path))) {
   #  dataTarGz <- "/srv/shared-data/cccandies-demo-202503-input.tar.gz"
   #  if (!dir.exists(dirname(dataTarGz)))
   #    stop("This module currently only works with untarred data from:\n", basename(dataTarGz))
@@ -117,7 +117,7 @@ plotFun <- function(sim) {
   if (!suppliedElsewhere("landscape", sim)) {
     rs.list <- lapply(P(sim)$basenames,
                       function(bn) {
-                        file.path(inputPath(sim), P(sim)$tifPath, bn, "inventory_init.tif")
+                        file.path(inputPath(sim), P(sim)$tif.path, bn, "inventory_init.tif")
                       }
     ) %>%
       lapply(., raster::stack)
