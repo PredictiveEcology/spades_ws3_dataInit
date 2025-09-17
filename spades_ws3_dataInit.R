@@ -91,7 +91,7 @@ plotFun <- function(sim) {
   }
   reticulate::use_virtualenv(venv)
 
-  Sys.setenv(RETICULATE_PYTHON = paste0("~/.virtualenvs/", venv, "bin/python3.12")
+  Sys.setenv(RETICULATE_PYTHON = paste0("~/.virtualenvs/", venv, "bin/python3.12"))
   system("cd modules/cccandies_demo_input && datalad get input . -r")
 
   # make sure that datalad-managed input files have all been downloaded from the cloud
