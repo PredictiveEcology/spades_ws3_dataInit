@@ -78,13 +78,21 @@ plotFun <- function(sim) {
 
   #Python
   #TODO: make this a function
-  needed <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas")
-  if (reticulate::virtualenv_exists("r-reticulate")) {
+  needed <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "git-annex")
+
+  browser()
+  reticulate::install_python(version = '3.12')
+
+  venv <- "r-reticulate"
+  if (reticulate::virtualenv_exists(venv)) {
     reticulate::py_install(needed)
   } else {
-    reticulate::virtualenv_create("r-reticulate", packages = needed)
+    reticulate::virtualenv_create(venv, packages = needed)
   }
-  reticulate::use_virtualenv("r-reticulate")
+  reticulate::use_virtualenv(venv)
+
+  Sys.setenv(RETICULATE_PYTHON = paste0("~/.virtualenvs/", venv, "bin/python3.12")
+  system("cd modules/cccandies_demo_input && datalad get input . -r")
 
   # make sure that datalad-managed input files have all been downloaded from the cloud
   system("datalad get input -r")
