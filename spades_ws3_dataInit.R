@@ -80,7 +80,6 @@ plotFun <- function(sim) {
   #TODO: make this a function
   needed <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "git-annex")
 
-  browser()
   reticulate::install_python(version = '3.12')
 
   venv <- "r-reticulate"
