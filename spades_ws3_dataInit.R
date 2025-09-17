@@ -9,7 +9,8 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "spades_ws3_dataInit.Rmd"),
-  reqdPkgs = list("reticulate", "raster", 'dplyr', 'magrittr', 'googledrive'),
+  reqdPkgs = list("reticulate", "raster", 'dplyr', 'magrittr', 'googledrive',
+                  'reproducible'),
   parameters = rbind(
     defineParameter("basenames", "character", NA, NA, NA,'vector of MU baseneames to load, beginning with tsa, e.g. "tsa40"'),
     defineParameter("base.year", 'numeric', 2015, NA, NA, "base year of forest inventory data"),
@@ -105,17 +106,16 @@ plotFun <- function(sim) {
   #  untar(localTarGz, exdir = dirname(inputPath(sim)))
   #}
 
-  file.path("")
+  dataLadInputs <- file.path(modulePath(sim)[1], "cccandies_demo_input")
   if (!suppliedElsewhere("hdt", sim)) {
     py <- import_builtins()
     pickle <- import("pickle")
     #TODO: explore cloning cccandies_demo_input into a subfolder,
     # get the data, and then copy it to a folder inside this module
     # which replaces use of inputPath below
-    browser()
     hdt.list <- lapply(P(sim)$basenames,
                        function(bn,
-                                input = "input",
+                                input = dataLadInputs,
                                 hdtPath = P(sim)$hdtPath,
                                 hdtPrefix = P(sim)$hdtPrefix) {
                          pklPath <- file.path(input, hdtPath, paste0(hdtPrefix, bn, ".pkl"))
@@ -129,7 +129,7 @@ plotFun <- function(sim) {
   if (!suppliedElsewhere("landscape", sim)) {
     rs.list <- lapply(P(sim)$basenames,
                       function(bn) {
-                        file.path(inputPath(sim), P(sim)$tif.path, bn, "inventory_init.tif")
+                        file.path(dataLadInputs, P(sim)$tif.path, bn, "inventory_init.tif")
                       }
     ) %>%
       lapply(., raster::stack)
