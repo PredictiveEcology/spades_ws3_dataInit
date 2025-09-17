@@ -90,7 +90,7 @@ plotFun <- function(sim) {
   }
   reticulate::use_virtualenv(venv)
 
-  Sys.setenv(RETICULATE_PYTHON = paste0("~/.virtualenvs/", venv, "bin/python3.12"))
+  Sys.setenv(RETICULATE_PYTHON = paste0("~/.virtualenvs/", venv, "/bin/python3.12"))
   system("cd modules/cccandies_demo_input && datalad get input . -r")
 
   # make sure that datalad-managed input files have all been downloaded from the cloud
@@ -105,15 +105,17 @@ plotFun <- function(sim) {
   #  untar(localTarGz, exdir = dirname(inputPath(sim)))
   #}
 
+  file.path("")
   if (!suppliedElsewhere("hdt", sim)) {
     py <- import_builtins()
     pickle <- import("pickle")
     #TODO: explore cloning cccandies_demo_input into a subfolder,
     # get the data, and then copy it to a folder inside this module
     # which replaces use of inputPath below
+    browser()
     hdt.list <- lapply(P(sim)$basenames,
                        function(bn,
-                                input = inputPath(sim),
+                                input = "input",
                                 hdtPath = P(sim)$hdtPath,
                                 hdtPrefix = P(sim)$hdtPrefix) {
                          pklPath <- file.path(input, hdtPath, paste0(hdtPrefix, bn, ".pkl"))
