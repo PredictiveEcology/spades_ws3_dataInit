@@ -9,7 +9,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "spades_ws3_dataInit.Rmd"),
-  reqdPkgs = list("reticulate", "raster", 'dplyr', 'magrittr', 'googledrive'),
+  reqdPkgs = list("reticulate", "raster", 'dplyr', 'magrittr', 'googledrive','SpaDES.core'),
   parameters = rbind(
     defineParameter("basenames", "character", NA, NA, NA,'vector of MU baseneames to load, beginning with tsa, e.g. "tsa40"'),
     defineParameter("base.year", 'numeric', 2015, NA, NA, "base year of forest inventory data"),
@@ -82,6 +82,7 @@ plotFun <- function(sim) {
 
   reticulate::install_python(version = '3.12')
 
+
   venv <- "r-reticulate"
   if (reticulate::virtualenv_exists(venv)) {
     reticulate::py_install(needed)
@@ -90,46 +91,44 @@ plotFun <- function(sim) {
   }
   reticulate::use_virtualenv(venv)
 
-  Sys.setenv(RETICULATE_PYTHON = paste0("~/.virtualenvs/", venv, "/bin/python3.12"))
-  system("cd modules/cccandies_demo_input && datalad get input . -r")
 
-  # make sure that datalad-managed input files have all been downloaded from the cloud
-  system("datalad get input -r")
+  # Load default data via datalad:
+  datalad<-import("datalad.api")                                          # load datalad module into reticulate
 
-  #if (!file.exists(file.path(inputPath(sim), Par$tif.path))) {
-  #  dataTarGz <- "/srv/shared-data/cccandies-demo-202503-input.tar.gz"
-  #  if (!dir.exists(dirname(dataTarGz)))
-  #    stop("This module currently only works with untarred data from:\n", basename(dataTarGz))
-  #  localTarGz <- file.path(inputPath(sim), basename(dataTarGz))
-  #  file.copy(dataTarGz, localTarGz)
-  #  untar(localTarGz, exdir = dirname(inputPath(sim)))
-  #}
+  # Make directory if necessary
+  if (!dir.exists(file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"))) {
+    dir.create(file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"))
+  }
+
+  # use datalad to get files:
+  #datalad$get(path = file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"), recursive = TRUE)    # put into "input/cccandies_demo_input" directory
+  datalad$get(path = file.path("modules/cccandies_demo_input"), recursive = TRUE)    # put into "modules/cccandies_demo_input" directory
 
   file.path("")
-  if (!suppliedElsewhere("hdt", sim)) {
+  if (!SpaDES.core::suppliedElsewhere("hdt", sim)) {
     py <- import_builtins()
     pickle <- import("pickle")
     #TODO: explore cloning cccandies_demo_input into a subfolder,
     # get the data, and then copy it to a folder inside this module
     # which replaces use of inputPath below
-    browser()
-    hdt.list <- lapply(P(sim)$basenames,
+    #browser()
+    hdt.list <- lapply(SpaDES.core::P(sim)$basenames,
                        function(bn,
-                                input = "input",
-                                hdtPath = P(sim)$hdtPath,
-                                hdtPrefix = P(sim)$hdtPrefix) {
+                                input = "modules/cccandies_demo_input",
+                                hdtPath = SpaDES.core::P(sim)$hdtPath,
+                                hdtPrefix = SpaDES.core::P(sim)$hdtPrefix) {
                          pklPath <- file.path(input, hdtPath, paste0(hdtPrefix, bn, ".pkl"))
                        }
     ) %>%
       lapply(., FUN = function(path) {pklPath <- (pickle$load(py$open(path, "rb")))})
-    names(hdt.list) <- P(sim)$basenames
+    names(hdt.list) <- SpaDES.core::P(sim)$basenames
     sim$hdt <- hdt.list
   }
 
-  if (!suppliedElsewhere("landscape", sim)) {
+  if (!SpaDES.core::suppliedElsewhere("landscape", sim)) {
     rs.list <- lapply(P(sim)$basenames,
                       function(bn) {
-                        file.path(inputPath(sim), P(sim)$tif.path, bn, "inventory_init.tif")
+                        file.path("modules/cccandies_demo_input", P(sim)$tif.path, bn, "inventory_init.tif")
                       }
     ) %>%
       lapply(., raster::stack)
@@ -170,9 +169,9 @@ plotFun <- function(sim) {
     names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
   }
 
-  if (!suppliedElsewhere("studyArea", sim)) {
+  if (!SpaDES.core::suppliedElsewhere("studyArea", sim)) {
     #TODO: use the bcdata package instead of this googledrive file
-    tsas <- prepInputs(url = "https://drive.google.com/file/d/1niq3Ms7mCPsnbRhbSqzThPUA0-Xfifmz/view?usp=drive_link",
+    tsas <- reproducible::prepInputs(url = "https://drive.google.com/file/d/1niq3Ms7mCPsnbRhbSqzThPUA0-Xfifmz/view?usp=drive_link",
                        destinationPath = dPath,
                        projectTo = sim$landscape,
                        fun = "terra::vect")
