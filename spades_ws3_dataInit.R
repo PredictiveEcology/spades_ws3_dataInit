@@ -102,8 +102,10 @@ plotFun <- function(sim) {
 
   }
 
+
+  # Wrap this in a 'if this already exists don't do it'
   git_submodule_add_in_SpaDES_module(GithubURL=P(sim)$GithubURL,
-                                     install.path=file.path(modulePath(sim), currentModule(sim),"cccandies-demo-202503-input"))
+                                     install.path=file.path("cccandies-demo-202503-input"))
 
 
   #git_submodule_add_in_SpaDES_module(GithubURL="git@github.com:UBC-FRESH/cccandies-demo-202503-input.git",
