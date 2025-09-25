@@ -92,48 +92,90 @@ plotFun <- function(sim) {
   reticulate::use_virtualenv(venv)
 
   browser()
-  git_submodule_add_in_SpaDES_module<-function(GithubURL,
-                                               install.path=file.path(modulePath(sim), currentModule(sim))){
+
+  git_submodule_add_in_SpaDES_module <- function(GithubURL,
+                                                 install.path = file.path(modulePath(sim), currentModule(sim))) {
+    # Move into the module directory
     origDir <- getwd()
     setwd(file.path(modulePath(sim), currentModule(sim)))
     on.exit(setwd(origDir))
 
-    gert::git_submodule_add(url=GithubURL,path=install.path)
+    # Normalize relative path
+    submodule_path <- normalizePath(install.path, mustWork = FALSE)
 
+    # Check if already in submodule list
+    existing <- tryCatch(
+      basename(gert::git_submodule_list()$path),
+      error = function(e) character(0) # if no submodules exist yet
+    )
+
+    already_there <- dir.exists(submodule_path) ||
+      basename(submodule_path) %in% existing
+
+    if (already_there) {
+      message("Submodule already exists at ", submodule_path, ". Skipping add.")
+    } else {
+      message("Adding submodule from ", GithubURL, " into ", submodule_path)
+      gert::git_submodule_add(url = GithubURL, path = submodule_path)
+    }
   }
 
-
-  # Wrap this in a 'if this already exists don't do it'
+  # Run it:
   git_submodule_add_in_SpaDES_module(GithubURL=P(sim)$GithubURL,
                                      install.path=file.path("cccandies-demo-202503-input"))
-
-
-  #git_submodule_add_in_SpaDES_module(GithubURL="git@github.com:UBC-FRESH/cccandies-demo-202503-input.git",
-  #                               install.path=file.path(modulePath(sim), currentModule(sim),"cccandies-demo-202503-input"))
-
-  #gert::git_submodule_add(url="git@github.com:UBC-FRESH/cccandies-demo-202503-input.git",path="modules/cccandies-demo-202503-input")
-
-
-  # setwd(the base folder you want to do the thing)
-  # Check on.exit
-  # 'git submodule_add(URL)'
-  # make sure: it's adding itself to the correct path (file.path(modulePath(sim),currentModule(sim),/data)(dataPath(sim)/BC_defaults)
 
   ## Prepare defaults:
   # Load default data via datalad:
   datalad<-import("datalad.api")           # load datalad module into reticulate
 
-  # use datalad to get files. Swap input directory when coordinated with GP to do so:
-  #datalad$get(path = file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"), recursive = TRUE)    # put into "input/cccandies_demo_input" directory
-  #datalad$get(path = file.path("modules/cccandies_demo_input"), recursive = TRUE)    # put into "modules/cccandies_demo_input" directory
+  # use datalad to fetch the actual files in the datalad repo, replacing the datalad placeholders.
+  datalad$get(path = file.path(modulePath(sim), currentModule(sim),"cccandies-demo-202503-input"), recursive = TRUE)
 
-  # Create hardlinks
+  # Create hardlink between "modules/spades_ws3_dataInit/cccandies-demo-202503-input" and "input/cccandies-demo-202503-input"
+  # CURRENTLY BROKEN SINCE THE FILES DON'T EXIST BECAUSE DATALAD HASN"T FETCHED THEM YET
+  create_hardlink_tree <- function(source_dir, target_dir) {
+    # List all files in source directory recursively
+    files <- list.files(source_dir, recursive = TRUE, full.names = TRUE)
+
+    # Filter out directories
+    files <- files[file.info(files)$isdir == FALSE]
+
+    # Create directories in target
+    allDirs <- unique(dirname(files))
+    relDirs <- sub(paste0("^", normalizePath(source_dir), "/?"), "", allDirs)
+    lapply(file.path(target_dir, relDirs), dir.create, recursive = TRUE, showWarnings = FALSE)
+
+    # Create hardlinks
+    for (f in files) {
+      rel_path <- sub(paste0("^", normalizePath(source_dir), "/?"), "", f)
+      target_path <- file.path(target_dir, rel_path)
+      if (!file.exists(target_path)) {
+        file.link(f, target_path)
+      } else {
+        message("Hardlink already exists: ", target_path)
+      }
+    }
+
+    message("Hardlink tree created from ", source_dir, " -> ", target_dir)
+  }
+
+
+  source_dir<-"modules/spades_ws3_dataInit/cccandies-demo-202503-input"
+  target_dir<-"input/cccandies-demo-202503-input"
+
+  # Example usage:
+  create_hardlinks_tree(
+    "modules/spades_ws3_dataInit/cccandies-demo-202503-input",
+    "input/cccandies-demo-202503-input"
+  )
+
+
   # Make directory if necessary (not needed until the input directory is swapped above)
   #if (!dir.exists(file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"))) {
   #  dir.create(file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"))
   #}
 
-  # Create link:
+
 
 
 
