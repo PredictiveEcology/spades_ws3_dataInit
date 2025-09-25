@@ -11,6 +11,7 @@ defineModule(sim, list(
   documentation = list("README.txt", "spades_ws3_dataInit.Rmd"),
   reqdPkgs = list("reticulate", "raster", 'dplyr', 'magrittr', 'googledrive','SpaDES.core'),
   parameters = rbind(
+    defineParameter("GithubURL", "character", NA, NA, NA,'URL of default data datalad repo'),
     defineParameter("basenames", "character", NA, NA, NA,'vector of MU baseneames to load, beginning with tsa, e.g. "tsa40"'),
     defineParameter("base.year", 'numeric', 2015, NA, NA, "base year of forest inventory data"),
     defineParameter("tif.path", "character", "tif", NA, NA, "Path to TIF raster inventory files"),
@@ -76,13 +77,12 @@ plotFun <- function(sim) {
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
 
-  #Python
+  # Prepare Python
   #TODO: make this a function
-  needed <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "git-annex")
-
+  needed <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "git-annex","seaborn", "folium", "debugpy")
   reticulate::install_python(version = '3.12')
 
-
+  # Setup virtual environment:
   venv <- "r-reticulate"
   if (reticulate::virtualenv_exists(venv)) {
     reticulate::py_install(needed)
@@ -92,17 +92,50 @@ plotFun <- function(sim) {
   reticulate::use_virtualenv(venv)
 
 
-  # Load default data via datalad:
-  datalad<-import("datalad.api")                                          # load datalad module into reticulate
 
-  # Make directory if necessary
+  browser()
+  git_submodule_add_in_SpaDES_module<-function(GithubURL,
+                                               install.path=file.path(modulePath(sim), currentModule(sim))){
+    origDir <- getwd()
+    setwd(file.path(modulePath(sim), currentModule(sim)))
+    on.exit(setwd(origDir))
+
+    gert::git_submodule_add(url=GithubURL,path=install.path)
+
+  }
+  browser()
+  git_submodule_add_in_SpaDES_module(GithubURL=P(sim)$GithubURL,
+                                     install.path=file.path(modulePath(sim), currentModule(sim),"cccandies-demo-202503-input"))
+
+
+  #git_submodule_add_in_SpaDES_module(GithubURL="git@github.com:UBC-FRESH/cccandies-demo-202503-input.git",
+  #                               install.path=file.path(modulePath(sim), currentModule(sim),"cccandies-demo-202503-input"))
+
+  #gert::git_submodule_add(url="git@github.com:UBC-FRESH/cccandies-demo-202503-input.git",path="modules/cccandies-demo-202503-input")
+
+
+  # setwd(the base folder you want to do the thing)
+  # Check on.exit
+  # 'git submodule_add(URL)'
+  # make sure: it's adding itself to the correct path (file.path(modulePath(sim),currentModule(sim),/data)(dataPath(sim)/BC_defaults)
+  browser()
+  ## Prepare defaults:
+  # Load default data via datalad:
+  datalad<-import("datalad.api")           # load datalad module into reticulate
+
+  # use datalad to get files. Swap input directory when coordinated with GP to do so:
+  #datalad$get(path = file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"), recursive = TRUE)    # put into "input/cccandies_demo_input" directory
+  #datalad$get(path = file.path("modules/cccandies_demo_input"), recursive = TRUE)    # put into "modules/cccandies_demo_input" directory
+
+  # Create hardlinks
+  # Make directory if necessary (not needed until the input directory is swapped above)
   if (!dir.exists(file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"))) {
     dir.create(file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"))
   }
 
-  # use datalad to get files:
-  #datalad$get(path = file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"), recursive = TRUE)    # put into "input/cccandies_demo_input" directory
-  datalad$get(path = file.path("modules/cccandies_demo_input"), recursive = TRUE)    # put into "modules/cccandies_demo_input" directory
+  # Create link:
+
+
 
   file.path("")
   if (!SpaDES.core::suppliedElsewhere("hdt", sim)) {
@@ -172,9 +205,9 @@ plotFun <- function(sim) {
   if (!SpaDES.core::suppliedElsewhere("studyArea", sim)) {
     #TODO: use the bcdata package instead of this googledrive file
     tsas <- reproducible::prepInputs(url = "https://drive.google.com/file/d/1niq3Ms7mCPsnbRhbSqzThPUA0-Xfifmz/view?usp=drive_link",
-                       destinationPath = dPath,
-                       projectTo = sim$landscape,
-                       fun = "terra::vect")
+                                     destinationPath = dPath,
+                                     projectTo = sim$landscape,
+                                     fun = "terra::vect")
     tsas$charTSA <- paste0("tsa", tsas$TSA_NUMBER)
     tsas <- tsas[tsas$charTSA %in% unlist(P(sim)$basenames),]
     tsas$foo <- 1
