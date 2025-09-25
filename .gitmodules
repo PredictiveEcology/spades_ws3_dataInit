@@ -1,0 +1,3 @@
+[submodule "cccandies-demo-202503-input"]
+	path = cccandies-demo-202503-input
+	url = git@github.com:UBC-FRESH/cccandies-demo-202503-input.git

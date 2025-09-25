@@ -91,8 +91,6 @@ plotFun <- function(sim) {
   }
   reticulate::use_virtualenv(venv)
 
-
-
   browser()
   git_submodule_add_in_SpaDES_module<-function(GithubURL,
                                                install.path=file.path(modulePath(sim), currentModule(sim))){
@@ -103,7 +101,7 @@ plotFun <- function(sim) {
     gert::git_submodule_add(url=GithubURL,path=install.path)
 
   }
-  browser()
+
   git_submodule_add_in_SpaDES_module(GithubURL=P(sim)$GithubURL,
                                      install.path=file.path(modulePath(sim), currentModule(sim),"cccandies-demo-202503-input"))
 
@@ -118,7 +116,7 @@ plotFun <- function(sim) {
   # Check on.exit
   # 'git submodule_add(URL)'
   # make sure: it's adding itself to the correct path (file.path(modulePath(sim),currentModule(sim),/data)(dataPath(sim)/BC_defaults)
-  browser()
+
   ## Prepare defaults:
   # Load default data via datalad:
   datalad<-import("datalad.api")           # load datalad module into reticulate
@@ -129,9 +127,9 @@ plotFun <- function(sim) {
 
   # Create hardlinks
   # Make directory if necessary (not needed until the input directory is swapped above)
-  if (!dir.exists(file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"))) {
-    dir.create(file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"))
-  }
+  #if (!dir.exists(file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"))) {
+  #  dir.create(file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"))
+  #}
 
   # Create link:
 
