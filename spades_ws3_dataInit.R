@@ -91,7 +91,6 @@ plotFun <- function(sim) {
   }
   reticulate::use_virtualenv(venv)
 
-  browser()
 
   git_submodule_add_in_SpaDES_module <- function(GithubURL,
                                                  install.path = file.path(modulePath(sim), currentModule(sim))) {
@@ -122,32 +121,36 @@ plotFun <- function(sim) {
 
   # Run it:
   git_submodule_add_in_SpaDES_module(GithubURL=P(sim)$GithubURL,
-                                     install.path=file.path("cccandies-demo-202503-input"))
+                                     install.path=file.path("cccandies_demo_input"))
 
   ## Prepare defaults:
   # Load default data via datalad:
   datalad<-import("datalad.api")           # load datalad module into reticulate
 
   # use datalad to fetch the actual files in the datalad repo, replacing the datalad placeholders.
-  datalad$get(path = file.path(modulePath(sim), currentModule(sim),"cccandies-demo-202503-input"), recursive = TRUE)
+  #datalad$get(path = file.path(modulePath(sim), currentModule(sim),"cccandies_demo_input"), recursive = TRUE,source = "public-s3")
+  datalad$get(path = file.path(modulePath(sim), currentModule(sim),"cccandies_demo_input"), recursive = TRUE)
 
   # Create hardlink between "modules/spades_ws3_dataInit/cccandies-demo-202503-input" and "input/cccandies-demo-202503-input"
   # CURRENTLY BROKEN SINCE THE FILES DON'T EXIST BECAUSE DATALAD HASN"T FETCHED THEM YET
   create_hardlink_tree <- function(source_dir, target_dir) {
     # List all files in source directory recursively
-    files <- list.files(source_dir, recursive = TRUE, full.names = TRUE)
+    files <- list.files(source_dir, recursive = TRUE, full.names = TRUE, include.dirs=F)
 
     # Filter out directories
-    files <- files[file.info(files)$isdir == FALSE]
+    #files <- files[file.info(files)$isdir == FALSE]
 
     # Create directories in target
     allDirs <- unique(dirname(files))
-    relDirs <- sub(paste0("^", normalizePath(source_dir), "/?"), "", allDirs)
+    relDirs <- sub(source_dir, "", allDirs)
+
     lapply(file.path(target_dir, relDirs), dir.create, recursive = TRUE, showWarnings = FALSE)
 
     # Create hardlinks
     for (f in files) {
-      rel_path <- sub(paste0("^", normalizePath(source_dir), "/?"), "", f)
+     # rel_path <- sub(paste0("^", normalizePath(source_dir), "/?"), "", f)
+      #rel_path <- sub(file.path(source_dir), "", f)
+      rel_path <- sub(paste0("^", source_dir, "/?"), "", f)
       target_path <- file.path(target_dir, rel_path)
       if (!file.exists(target_path)) {
         file.link(f, target_path)
@@ -159,14 +162,13 @@ plotFun <- function(sim) {
     message("Hardlink tree created from ", source_dir, " -> ", target_dir)
   }
 
-
-  source_dir<-"modules/spades_ws3_dataInit/cccandies-demo-202503-input"
-  target_dir<-"input/cccandies-demo-202503-input"
+  #source_dir="modules/spades_ws3_dataInit/cccandies_demo_input"
+  #target_dir="input/cccandies_demo_input"
 
   # Example usage:
-  create_hardlinks_tree(
-    "modules/spades_ws3_dataInit/cccandies-demo-202503-input",
-    "input/cccandies-demo-202503-input"
+  create_hardlink_tree(
+    source_dir="modules/spades_ws3_dataInit/cccandies_demo_input",
+    target_dir="input/cccandies_demo_input"
   )
 
 
@@ -189,7 +191,7 @@ plotFun <- function(sim) {
     #browser()
     hdt.list <- lapply(SpaDES.core::P(sim)$basenames,
                        function(bn,
-                                input = "modules/cccandies_demo_input",
+                                input = "modules/spades_ws3_dataInit/cccandies_demo_input",
                                 hdtPath = SpaDES.core::P(sim)$hdtPath,
                                 hdtPrefix = SpaDES.core::P(sim)$hdtPrefix) {
                          pklPath <- file.path(input, hdtPath, paste0(hdtPrefix, bn, ".pkl"))
@@ -203,7 +205,7 @@ plotFun <- function(sim) {
   if (!SpaDES.core::suppliedElsewhere("landscape", sim)) {
     rs.list <- lapply(P(sim)$basenames,
                       function(bn) {
-                        file.path("modules/cccandies_demo_input", P(sim)$tif.path, bn, "inventory_init.tif")
+                        file.path("modules/spades_ws3_dataInit/cccandies_demo_input", P(sim)$tif.path, bn, "inventory_init.tif")
                       }
     ) %>%
       lapply(., raster::stack)
