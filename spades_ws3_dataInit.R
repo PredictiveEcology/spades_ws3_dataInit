@@ -82,7 +82,7 @@ plotFun <- function(sim) {
   needed <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "git-annex","seaborn", "folium", "debugpy")
   reticulate::install_python(version = '3.12')
 
-  # Setup virtual environment:
+  # Setup virtual environment: #TODO Make this a function too
   venv <- "r-reticulate"
   if (reticulate::virtualenv_exists(venv)) {
     reticulate::py_install(needed)
@@ -91,94 +91,17 @@ plotFun <- function(sim) {
   }
   reticulate::use_virtualenv(venv)
 
-
-  git_submodule_add_in_SpaDES_module <- function(GithubURL,
-                                                 install.path = file.path(modulePath(sim), currentModule(sim))) {
-    # Move into the module directory
-    origDir <- getwd()
-    setwd(file.path(modulePath(sim), currentModule(sim)))
-    on.exit(setwd(origDir))
-
-    # Normalize relative path
-    submodule_path <- normalizePath(install.path, mustWork = FALSE)
-
-    # Check if already in submodule list
-    existing <- tryCatch(
-      basename(gert::git_submodule_list()$path),
-      error = function(e) character(0) # if no submodules exist yet
-    )
-
-    already_there <- dir.exists(submodule_path) ||
-      basename(submodule_path) %in% existing
-
-    if (already_there) {
-      message("Submodule already exists at ", submodule_path, ". Skipping add.")
-    } else {
-      message("Adding submodule from ", GithubURL, " into ", submodule_path)
-      gert::git_submodule_add(url = GithubURL, path = submodule_path)
-    }
-  }
-
-  # Run it:
+  ## Prepare demo defaults:
   git_submodule_add_in_SpaDES_module(GithubURL=P(sim)$GithubURL,
-                                     install.path=file.path("cccandies_demo_input"))
+                                     module.path=modulePath(sim),
+                                     current.module.name=currentModule(sim))
 
-  ## Prepare defaults:
-  # Load default data via datalad:
+  # Load demo default data via datalad:
   datalad<-import("datalad.api")           # load datalad module into reticulate
 
   # use datalad to fetch the actual files in the datalad repo, replacing the datalad placeholders.
-  #datalad$get(path = file.path(modulePath(sim), currentModule(sim),"cccandies_demo_input"), recursive = TRUE,source = "public-s3")
-  datalad$get(path = file.path(modulePath(sim), currentModule(sim),"cccandies_demo_input"), recursive = TRUE)
-
-  # Create hardlink between "modules/spades_ws3_dataInit/cccandies-demo-202503-input" and "input/cccandies-demo-202503-input"
-  # CURRENTLY BROKEN SINCE THE FILES DON'T EXIST BECAUSE DATALAD HASN"T FETCHED THEM YET
-  create_hardlink_tree <- function(source_dir, target_dir) {
-    # List all files in source directory recursively
-    files <- list.files(source_dir, recursive = TRUE, full.names = TRUE, include.dirs=F)
-
-    # Filter out directories
-    #files <- files[file.info(files)$isdir == FALSE]
-
-    # Create directories in target
-    allDirs <- unique(dirname(files))
-    relDirs <- sub(source_dir, "", allDirs)
-
-    lapply(file.path(target_dir, relDirs), dir.create, recursive = TRUE, showWarnings = FALSE)
-
-    # Create hardlinks
-    for (f in files) {
-     # rel_path <- sub(paste0("^", normalizePath(source_dir), "/?"), "", f)
-      #rel_path <- sub(file.path(source_dir), "", f)
-      rel_path <- sub(paste0("^", source_dir, "/?"), "", f)
-      target_path <- file.path(target_dir, rel_path)
-      if (!file.exists(target_path)) {
-        file.link(f, target_path)
-      } else {
-        message("Hardlink already exists: ", target_path)
-      }
-    }
-
-    message("Hardlink tree created from ", source_dir, " -> ", target_dir)
-  }
-
-  #source_dir="modules/spades_ws3_dataInit/cccandies_demo_input"
-  #target_dir="input/cccandies_demo_input"
-
-  # Example usage:
-  create_hardlink_tree(
-    source_dir="modules/spades_ws3_dataInit/cccandies_demo_input",
-    target_dir="input/cccandies_demo_input"
-  )
-
-
-  # Make directory if necessary (not needed until the input directory is swapped above)
-  #if (!dir.exists(file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"))) {
-  #  dir.create(file.path(SpaDES.core::inputPath(sim),"cccandies_demo_input"))
-  #}
-
-
-
+  py$dat_path<-file.path(modulePath(sim),currentModule(sim),"cccandies_demo_input")  # Define dat_path
+  datalad$get(path = py$dat_path, recursive = TRUE)
 
 
   file.path("")
@@ -260,5 +183,39 @@ plotFun <- function(sim) {
     sim$studyArea <- tsas
   }
 
+
   return(invisible(sim))
 }
+
+# 'add git submodule to a spades module' function:
+git_submodule_add_in_SpaDES_module <- function(module.path, current.module.name,GithubURL) {
+  # Move into the module directory
+  install.path = file.path(module.path,current.module.name)
+
+  origDir <- getwd()
+  setwd(install.path)
+  on.exit(setwd(origDir))
+
+  # Normalize relative path
+  submodule_path <- normalizePath(install.path, mustWork = FALSE)
+
+  # Check if already in submodule list
+  existing <- tryCatch(
+    basename(gert::git_submodule_list()$path),
+    error = function(e) character(0) # if no submodules exist yet
+  )
+
+  already_there <- dir.exists(submodule_path) ||
+    basename(submodule_path) %in% existing
+
+  if (already_there) {
+    message("Submodule already exists at ", submodule_path, ". Skipping add.")
+  } else {
+    message("Adding submodule from ", GithubURL, " into ", submodule_path)
+    gert::git_submodule_add(url = GithubURL, path = submodule_path)
+  }
+}
+
+
+
+
