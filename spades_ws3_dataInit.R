@@ -77,7 +77,7 @@ plotFun <- function(sim) {
 
 
   # Prepare Python Environment
-  py_packages <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "git-annex","seaborn", "folium", "debugpy")
+  py_packages <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "git-annex","seaborn", "folium", "debugpy","pulp")
   py_version<-'3.12'
   venv<-'r-reticulate'
 
