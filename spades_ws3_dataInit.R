@@ -74,22 +74,16 @@ plotFun <- function(sim) {
 
 .inputObjects <- function(sim) {
 
-  dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
-  message(currentModule(sim), ": using dataPath '", dPath, "'.")
 
-  # Prepare Python
-  #TODO: make this a function
-  needed <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "git-annex","seaborn", "folium", "debugpy")
-  reticulate::install_python(version = '3.12')
 
-  # Setup virtual environment: #TODO Make this a function too
-  venv <- "r-reticulate"
-  if (reticulate::virtualenv_exists(venv)) {
-    reticulate::py_install(needed)
-  } else {
-    reticulate::virtualenv_create(venv, packages = needed)
-  }
-  reticulate::use_virtualenv(venv)
+  # Prepare Python Environment
+  py_packages <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "git-annex","seaborn", "folium", "debugpy")
+  py_version<-'3.12'
+  venv<-'r-reticulate'
+
+  install_python_env(py_version= py_version,
+                     py_packages= py_packages,
+                     venv= venv)
 
   ## Prepare demo defaults:
   git_submodule_add_in_SpaDES_module(GithubURL=P(sim)$GithubURL,
@@ -100,8 +94,15 @@ plotFun <- function(sim) {
   datalad<-import("datalad.api")           # load datalad module into reticulate
 
   # use datalad to fetch the actual files in the datalad repo, replacing the datalad placeholders.
-  py$dat_path<-file.path(modulePath(sim),currentModule(sim),"cccandies_demo_input")  # Define dat_path
-  datalad$get(path = py$dat_path, recursive = TRUE)
+  #py$dat_path<-file.path(modulePath(sim),currentModule(sim),"cccandies_demo_input")  # Define dat_path
+  datalad.dir<-file.path(modulePath(sim),currentModule(sim),"cccandies_demo_input")
+  datalad$get(path = datalad.dir, recursive = TRUE)
+
+  # Create links:
+  create_link_tree(
+    source_dir=datalad.dir,
+    target_dir=inputPath(sim)
+  )
 
 
   file.path("")
@@ -114,7 +115,7 @@ plotFun <- function(sim) {
     #browser()
     hdt.list <- lapply(SpaDES.core::P(sim)$basenames,
                        function(bn,
-                                input = "modules/spades_ws3_dataInit/cccandies_demo_input",
+                                input = inputPath(sim),
                                 hdtPath = SpaDES.core::P(sim)$hdtPath,
                                 hdtPrefix = SpaDES.core::P(sim)$hdtPrefix) {
                          pklPath <- file.path(input, hdtPath, paste0(hdtPrefix, bn, ".pkl"))
@@ -128,7 +129,7 @@ plotFun <- function(sim) {
   if (!SpaDES.core::suppliedElsewhere("landscape", sim)) {
     rs.list <- lapply(P(sim)$basenames,
                       function(bn) {
-                        file.path("modules/spades_ws3_dataInit/cccandies_demo_input", P(sim)$tif.path, bn, "inventory_init.tif")
+                        file.path(inputPath(sim), P(sim)$tif.path, bn, "inventory_init.tif")
                       }
     ) %>%
       lapply(., raster::stack)
@@ -169,6 +170,10 @@ plotFun <- function(sim) {
     names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
   }
 
+  # Set dPath directory (for studyArea)
+  dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
+  message(currentModule(sim), ": using dataPath '", dPath, "'.")
+
   if (!SpaDES.core::suppliedElsewhere("studyArea", sim)) {
     #TODO: use the bcdata package instead of this googledrive file
     tsas <- reproducible::prepInputs(url = "https://drive.google.com/file/d/1niq3Ms7mCPsnbRhbSqzThPUA0-Xfifmz/view?usp=drive_link",
@@ -187,7 +192,24 @@ plotFun <- function(sim) {
   return(invisible(sim))
 }
 
-# 'add git submodule to a spades module' function:
+#####################
+# Functions:
+
+## "Install Python Environment" function:
+# This installs pyton of a given version, installs packages, and creates a virtual environment
+install_python_env <- function(py_version, py_packages, venv) {
+  reticulate::install_python(version = py_version)
+
+  if (reticulate::virtualenv_exists(venv)) {
+    reticulate::py_install(py_packages)
+  } else {
+    reticulate::virtualenv_create(venv, packages = py_packages)
+  }
+  reticulate::use_virtualenv(venv)
+}
+
+## 'Add Git Submodule to a SpaDES Module' function:
+# This pulls a github module and installs it as a github submodule of your SpaDES module
 git_submodule_add_in_SpaDES_module <- function(module.path, current.module.name,GithubURL) {
   # Move into the module directory
   install.path = file.path(module.path,current.module.name)
@@ -217,5 +239,35 @@ git_submodule_add_in_SpaDES_module <- function(module.path, current.module.name,
 }
 
 
+## 'Create Link Tree' function:
+# This creates symlinks between source_dir and target_dir:
+create_link_tree <- function(source_dir, target_dir) {
+  # Normalize paths for consistency
+  source_dir <- normalizePath(source_dir, mustWork = TRUE)
+  target_dir <- normalizePath(target_dir, mustWork = TRUE)
+
+  # List all files in source directory recursively (exclude directories)
+  files <- list.files(source_dir, recursive = TRUE, full.names = TRUE, include.dirs = FALSE)
+
+  # Compute relative paths (portable across OS)
+  rel_paths <- substring(files, nchar(source_dir) + 2)
+
+  # Ensure all needed directories exist in target
+  rel_dirs <- unique(dirname(rel_paths))
+  lapply(file.path(target_dir, rel_dirs), dir.create, recursive = TRUE, showWarnings = FALSE)
+
+  # Create symlinks
+  for (i in seq_along(files)) {
+    target_path <- file.path(target_dir, rel_paths[i])
+    if (!file.exists(target_path)) {
+      ok <- file.symlink(from = files[i], to = target_path)
+      if (!ok) warning("Failed to create symlink: ", target_path)
+    } else {
+      message("Symlink already exists: ", target_path)
+    }
+  }
+
+  message("Symlink tree created from ", source_dir, " -> ", target_dir)
+}
 
 
