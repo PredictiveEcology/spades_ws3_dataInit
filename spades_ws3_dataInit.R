@@ -1,8 +1,12 @@
 defineModule(sim, list(
   name = "spades_ws3_dataInit",
-  description = NA, #"insert module description here",
-  keywords = NA, # c("insert key words here"),
-  authors = c(person(c("First", "Middle"), "Last", email = "email@example.com", role = c("aut", "cre"))),
+  description = paste(
+    "This module prepares data for input to spades_ws3 module family"),
+  keywords = c("harvesting","dataInit","WS3"),
+  authors = c(
+    person(c("Ian", "Middle"), "Eddy", email = "ian.eddy@nrcan-rncan.gc.ca", role = c("aut", "cre")),
+    person(c("Allen", "Thomas"), "Larocque", email = "allen.larocque@gmail.com", role = c("aut", "ctb"))
+    ),
   childModules = character(0),
   version = list(SpaDES.core = "0.2.5.9000", spades_ws3_dataInit = "0.0.1"),
   timeframe = as.POSIXlt(c(NA, NA)),
