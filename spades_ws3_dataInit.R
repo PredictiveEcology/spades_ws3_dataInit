@@ -99,7 +99,10 @@ plotFun <- function(sim) {
 
   # use datalad to fetch the actual files in the datalad repo, replacing the datalad placeholders.
   #py$dat_path<-file.path(modulePath(sim),currentModule(sim),"cccandies_demo_input")  # Define dat_path
-  datalad.dir<-file.path(modulePath(sim),currentModule(sim),"cccandies_demo_input")
+
+  this.module.path<-modulePath(sim)[grep(currentModule(sim), lapply(modulePath(sim), list.files))] # This is just modulePath, but adapted to be safe for multiple modulePaths. It just picks the directory that the current module is in
+
+  datalad.dir<-file.path(this.module.path,currentModule(sim),"cccandies_demo_input")
   datalad$get(path = datalad.dir, recursive = TRUE)
 
   # Create links:
@@ -215,8 +218,10 @@ install_python_env <- function(py_version, py_packages, venv) {
 ## 'Add Git Submodule to a SpaDES Module' function:
 # This pulls a github module and installs it as a github submodule of your SpaDES module
 git_submodule_add_in_SpaDES_module <- function(module.path, current.module.name,GithubURL) {
+
   # Move into the module directory
-  install.path = file.path(module.path,current.module.name)
+  module.path.currentmodule<-module.path[grep(current.module.name, lapply(module.path, list.files))]
+  install.path = file.path(module.path.currentmodule,current.module.name)
 
   origDir <- getwd()
   setwd(install.path)
