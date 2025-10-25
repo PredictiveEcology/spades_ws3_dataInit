@@ -1,12 +1,12 @@
 defineModule(sim, list(
   name = "spades_ws3_dataInit",
   description = paste(
-    "This module prepares data for input to spades_ws3 module family"),
+    "This module prepares data for input to spades_ws3 module family. Currently this works with datalad repository prepared by the UBC-FRESH lab"),
   keywords = c("harvesting","dataInit","WS3"),
   authors = c(
     person(c("Ian", "Middle"), "Eddy", email = "ian.eddy@nrcan-rncan.gc.ca", role = c("aut", "cre")),
     person(c("Allen", "Thomas"), "Larocque", email = "allen.larocque@gmail.com", role = c("aut", "ctb"))
-    ),
+  ),
   childModules = character(0),
   version = list(SpaDES.core = "0.2.5.9000", spades_ws3_dataInit = "0.0.1"),
   timeframe = as.POSIXlt(c(NA, NA)),
@@ -80,7 +80,7 @@ plotFun <- function(sim) {
 
 
 
-  # Prepare Python Environment
+  ## Prepare Python Environment
   py_packages <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "git-annex","seaborn", "folium", "debugpy","pulp")
   py_version<-'3.12'
   venv<-'r-reticulate'
@@ -96,30 +96,24 @@ plotFun <- function(sim) {
 
   # Load demo default data via datalad:
   datalad<-import("datalad.api")           # load datalad module into reticulate
-
-  # use datalad to fetch the actual files in the datalad repo, replacing the datalad placeholders.
-  #py$dat_path<-file.path(modulePath(sim),currentModule(sim),"cccandies_demo_input")  # Define dat_path
-
   this.module.path<-modulePath(sim)[grep(currentModule(sim), lapply(modulePath(sim), list.files))] # This is just modulePath, but adapted to be safe for multiple modulePaths. It just picks the directory that the current module is in
+  datalad.dir<-file.path(this.module.path,currentModule(sim),"cccandies_demo_input")   # The directory to put the datalad files
+  datalad$get(path = datalad.dir, recursive = TRUE)   # get the datalad files
 
-  datalad.dir<-file.path(this.module.path,currentModule(sim),"cccandies_demo_input")
-  datalad$get(path = datalad.dir, recursive = TRUE)
-
-  # Create links:
+  # Create softlinks between inputPath(sim) and the datalad directory:
   create_link_tree(
     source_dir=datalad.dir,
     target_dir=inputPath(sim)
   )
 
 
-  file.path("")
+  ## Import the datalad input files prepared by the UBC-FRESH lab to work with SpaDES:
+  # In this implementation, the ONLY interaction is through the 'age' attribute
+
+  # Import the hdt tables:
   if (!SpaDES.core::suppliedElsewhere("hdt", sim)) {
     py <- import_builtins()
     pickle <- import("pickle")
-    #TODO: explore cloning cccandies_demo_input into a subfolder,
-    # get the data, and then copy it to a folder inside this module
-    # which replaces use of inputPath below
-    #browser()
     hdt.list <- lapply(SpaDES.core::P(sim)$basenames,
                        function(bn,
                                 input = inputPath(sim),
@@ -133,16 +127,20 @@ plotFun <- function(sim) {
     sim$hdt <- hdt.list
   }
 
+  # Convert the datalad tifs and inventory to 'landscape' object:
   if (!SpaDES.core::suppliedElsewhere("landscape", sim)) {
-    rs.list <- lapply(P(sim)$basenames,
+    rs.list <- lapply(P(sim)$basenames,  # read in all the FSA inputs as a list of RasterStacks #TODO: update to Terra?
                       function(bn) {
                         file.path(inputPath(sim), P(sim)$tif.path, bn, "inventory_init.tif")
                       }
     ) %>%
       lapply(., raster::stack)
-    names(rs.list) <- P(sim)$basenames
+    names(rs.list) <- P(sim)$basenames                      # Rename the list the TSA names
+
+    # "Recompile rasterstack" function:
+    # This takes the raster stack in rs.list restructures the raster stack and merges it with attribute data
     recompile.rs <- function(name, rsList = rs.list) {
-      mu.id = as.integer(substr(name, 4, 50))
+      mu.id = as.integer(substr(name, 4, 50))    # The first 3 characters are presumed to be "TSA"; 50 is just a big number
       rs <- raster::stack(rs.list[name])
       df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
       df$key <- as.double(rownames(df)) # add hashcode (index) as double column
@@ -163,6 +161,8 @@ plotFun <- function(sim) {
       ###############################################################
       return(raster::stack(r.muid, r.thlb, r.au, r.blockid, r.age))
     }
+
+    # Now, apply function 'recompile.rs' to each element of rs.list:
     rs.list <- lapply(names(rs.list), recompile.rs)
     # prep rs for use as arg in do.call wrapper to raster::mosaic function
     names(rs.list) <- NULL # else TSA names will be interpreted as arg names by raster::mosaic
@@ -181,6 +181,7 @@ plotFun <- function(sim) {
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
 
+  # Get the studyArea if we don't already have it. Defaults to xxx
   if (!SpaDES.core::suppliedElsewhere("studyArea", sim)) {
     #TODO: use the bcdata package instead of this googledrive file
     tsas <- reproducible::prepInputs(url = "https://drive.google.com/file/d/1niq3Ms7mCPsnbRhbSqzThPUA0-Xfifmz/view?usp=drive_link",
