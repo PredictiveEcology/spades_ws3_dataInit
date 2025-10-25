@@ -181,20 +181,57 @@ plotFun <- function(sim) {
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
 
-  # Get the studyArea if we don't already have it. Defaults to xxx
+
+  # Get the studyArea if we don't already have it. Defaults to BC Timber Supply Areas from bcdata
   if (!SpaDES.core::suppliedElsewhere("studyArea", sim)) {
-    #TODO: use the bcdata package instead of this googledrive file
-    tsas <- reproducible::prepInputs(url = "https://drive.google.com/file/d/1niq3Ms7mCPsnbRhbSqzThPUA0-Xfifmz/view?usp=drive_link",
-                                     destinationPath = dPath,
-                                     projectTo = sim$landscape,
-                                     fun = "terra::vect")
+
+    tsa_id <- "8daa29da-d7f4-401c-83ae-d962e3a28980"  # Timber Supply Areas
+
+    # Define where the local copy should be saved
+    local_gpkg <- file.path(dPath, "tsa_bcdata.gpkg")
+
+    # 1. Download from BC Data Catalogue using bcdata
+    if (!file.exists(local_gpkg)) {
+      message("Downloading TSA polygons from BC Data Catalogue ...")
+      tsa_sf <- bcdata::bcdc_get_data(tsa_id)
+      sf::st_write(tsa_sf, local_gpkg, delete_dsn = TRUE)
+    }
+
+    # 2. Use prepInputs for reprojection, masking, and caching
+    tsas <- reproducible::prepInputs(
+      targetFile = local_gpkg,
+      destinationPath = dPath,
+      fun = "terra::vect",
+      projectTo = sim$landscape,   # ensure CRS match
+      cachePath = dPath
+    )
+
+    # 3. Filter and aggregate to create studyArea
     tsas$charTSA <- paste0("tsa", tsas$TSA_NUMBER)
-    tsas <- tsas[tsas$charTSA %in% unlist(P(sim)$basenames),]
+    tsas <- tsas[tsas$charTSA %in% unlist(P(sim)$basenames), ]
     tsas$foo <- 1
-    #study area must be a single polygon
-    tsas <- aggregate(tsas, field = "foo", fun = mean)
+    tsas <- terra::aggregate(tsas, by = tsas$foo, fun = mean)
+
     sim$studyArea <- tsas
   }
+
+
+
+
+  # Get the studyArea if we don't already have it. Defaults to xxx
+  # if (!SpaDES.core::suppliedElsewhere("studyArea", sim)) {
+  #   #TODO: use the bcdata package instead of this googledrive file
+  #   tsas <- reproducible::prepInputs(url = "https://drive.google.com/file/d/1niq3Ms7mCPsnbRhbSqzThPUA0-Xfifmz/view?usp=drive_link",
+  #                                    destinationPath = dPath,
+  #                                    projectTo = sim$landscape,
+  #                                    fun = "terra::vect")
+  #   tsas$charTSA <- paste0("tsa", tsas$TSA_NUMBER)
+  #   tsas <- tsas[tsas$charTSA %in% unlist(P(sim)$basenames),]
+  #   tsas$foo <- 1
+  #   #study area must be a single polygon
+  #   tsas <- aggregate(tsas, field = "foo", fun = mean)
+  #   sim$studyArea <- tsas
+  # }
 
 
   return(invisible(sim))
