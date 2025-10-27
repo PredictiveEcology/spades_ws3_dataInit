@@ -177,15 +177,16 @@ plotFun <- function(sim) {
     names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
   }
 
-  # Set dPath directory (for studyArea)
+
+  ## Get the studyArea if we don't already have it. Defaults to BC Timber Supply Areas from bcdata
+    # Set dPath directory
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
 
-
-  # Get the studyArea if we don't already have it. Defaults to BC Timber Supply Areas from bcdata
+  # Use bcdata package to get the TSA boundary map
   if (!SpaDES.core::suppliedElsewhere("studyArea", sim)) {
 
-    tsa_id <- "8daa29da-d7f4-401c-83ae-d962e3a28980"  # Timber Supply Areas
+    tsa_id <- "8daa29da-d7f4-401c-83ae-d962e3a28980"  # Timber Supply Areas map
 
     # Define where the local copy should be saved
     local_gpkg <- file.path(dPath, "tsa_bcdata.gpkg")
@@ -207,32 +208,13 @@ plotFun <- function(sim) {
     )
 
     # 3. Filter and aggregate to create studyArea
-    tsas$charTSA <- paste0("tsa", tsas$TSA_NUMBER)
+    tsas$charTSA <- paste0("tsa", tsas$TSA_NUMBER)                   # Extract vector of TSA number and append 'tsa' such that it matches the 'basenames'
     tsas <- tsas[tsas$charTSA %in% unlist(P(sim)$basenames), ]
-    tsas$foo <- 1
-    tsas <- terra::aggregate(tsas, by = tsas$foo, fun = mean)
+    tsas$foo <- 1                                                    # Dummy variable
+    tsas <- terra::aggregate(tsas, by = tsas$foo, fun = mean)        # Aggregate into a single polygon. Take the mean
 
     sim$studyArea <- tsas
   }
-
-
-
-
-  # Get the studyArea if we don't already have it. Defaults to xxx
-  # if (!SpaDES.core::suppliedElsewhere("studyArea", sim)) {
-  #   #TODO: use the bcdata package instead of this googledrive file
-  #   tsas <- reproducible::prepInputs(url = "https://drive.google.com/file/d/1niq3Ms7mCPsnbRhbSqzThPUA0-Xfifmz/view?usp=drive_link",
-  #                                    destinationPath = dPath,
-  #                                    projectTo = sim$landscape,
-  #                                    fun = "terra::vect")
-  #   tsas$charTSA <- paste0("tsa", tsas$TSA_NUMBER)
-  #   tsas <- tsas[tsas$charTSA %in% unlist(P(sim)$basenames),]
-  #   tsas$foo <- 1
-  #   #study area must be a single polygon
-  #   tsas <- aggregate(tsas, field = "foo", fun = mean)
-  #   sim$studyArea <- tsas
-  # }
-
 
   return(invisible(sim))
 }
