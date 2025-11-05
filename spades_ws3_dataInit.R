@@ -1,19 +1,22 @@
 defineModule(sim, list(
   name = "spades_ws3_dataInit",
-  description = paste(
-    "This module prepares data for input to spades_ws3 module family. Currently this works with datalad repository prepared by the UBC-FRESH lab"),
+  description = "This module prepares data for input to spades_ws3 module family. Currently this works with datalad repository prepared by the UBC-FRESH lab",
   keywords = c("harvesting","dataInit","WS3"),
-  authors = c(
-    person(c("Ian", "Middle"), "Eddy", email = "ian.eddy@nrcan-rncan.gc.ca", role = c("aut", "cre")),
-    person(c("Allen", "Thomas"), "Larocque", email = "allen.larocque@gmail.com", role = c("aut", "ctb"))
+  authors = list(
+    person(given = "Ian", family = "Eddy",
+           email = "ian.eddy@nrcan-rncan.gc.ca",
+           role = c("aut", "cre")),
+    person(given = "Allen Thomas", family = "Larocque",
+           email = "allen.larocque@gmail.com",
+           role = c("aut", "ctb"))
   ),
   childModules = character(0),
-  version = list(SpaDES.core = "0.2.5.9000", spades_ws3_dataInit = "0.0.1"),
+  version = list(spades_ws3_dataInit = "0.0.1"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "spades_ws3_dataInit.Rmd"),
-  reqdPkgs = list("reticulate", "raster", 'dplyr', 'magrittr', 'googledrive','SpaDES.core'),
+  reqdPkgs = list("reticulate", "raster", 'dplyr', 'magrittr', 'googledrive','SpaDES.core','terra','bcdata'),
   parameters = rbind(
     defineParameter("GithubURL", "character", NA, NA, NA,'URL of default data datalad repo'),
     defineParameter("basenames", "character", NA, NA, NA,'vector of MU baseneames to load, beginning with tsa, e.g. "tsa40"'),
@@ -31,7 +34,7 @@ defineModule(sim, list(
     expectsInput(objectName = "studyArea", objectClass = "SpatVector", desc = "study area in BC - made of TSAs", sourceURL = NA)
   ),
   outputObjects = bind_rows(
-    createsOutput(objectName = "landscape", objectClass = "RasterStack", desc = "landscape layers"),
+    createsOutput(objectName = "landscape", objectClass = "SpatRaster", desc = "landscape layers"),
     createsOutput(objectName = "hdt", objectClass = "list", desc = "stand development type hashcode decoder")
   )
 ))
@@ -78,8 +81,6 @@ plotFun <- function(sim) {
 
 .inputObjects <- function(sim) {
 
-
-
   ## Prepare Python Environment
   py_packages <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "git-annex","seaborn", "folium", "debugpy","pulp")
   py_version<-'3.12'
@@ -108,84 +109,105 @@ plotFun <- function(sim) {
 
 
   ## Import the datalad input files prepared by the UBC-FRESH lab to work with SpaDES:
-  # In this implementation, the ONLY interaction is through the 'age' attribute
 
   # Import the hdt tables:
   if (!SpaDES.core::suppliedElsewhere("hdt", sim)) {
     py <- import_builtins()
     pickle <- import("pickle")
-    hdt.list <- lapply(SpaDES.core::P(sim)$basenames,
-                       function(bn,
-                                input = inputPath(sim),
-                                hdtPath = SpaDES.core::P(sim)$hdtPath,
-                                hdtPrefix = SpaDES.core::P(sim)$hdtPrefix) {
-                         pklPath <- file.path(input, hdtPath, paste0(hdtPrefix, bn, ".pkl"))
-                       }
-    ) %>%
-      lapply(., FUN = function(path) {pklPath <- (pickle$load(py$open(path, "rb")))})
-    names(hdt.list) <- SpaDES.core::P(sim)$basenames
+
+    hdt.list <- lapply(P(sim)$basenames, function(bn) {
+      path <- file.path(inputPath(sim), P(sim)$hdtPath, paste0(P(sim)$hdtPrefix, bn, ".pkl"))
+      if (!file.exists(path)) stop("HDT file missing: ", path)
+      pickle$load(py$open(path, "rb"))
+    })
+    names(hdt.list) <- P(sim)$basenames
     sim$hdt <- hdt.list
   }
 
   # Convert the datalad tifs and inventory to 'landscape' object:
   if (!SpaDES.core::suppliedElsewhere("landscape", sim)) {
-    rs.list <- lapply(P(sim)$basenames,  # read in all the FSA inputs as a list of RasterStacks #TODO: update to Terra?
-                      function(bn) {
-                        file.path(inputPath(sim), P(sim)$tif.path, bn, "inventory_init.tif")
-                      }
-    ) %>%
-      lapply(., raster::stack)
-    names(rs.list) <- P(sim)$basenames                      # Rename the list the TSA names
+    # Build full paths to all inventory rasters
+    tif_files <- file.path(inputPath(sim), P(sim)$tif.path, P(sim)$basenames, "inventory_init.tif")
 
-    # "Recompile rasterstack" function:
-    # This takes the raster stack in rs.list restructures the raster stack and merges it with attribute data
-    recompile.rs <- function(name, rsList = rs.list) {
-      mu.id = as.integer(substr(name, 4, 50))    # The first 3 characters are presumed to be "TSA"; 50 is just a big number
-      rs <- raster::stack(rs.list[name])
-      df <- as.data.frame(lapply(data.frame(do.call(rbind, hdt.list[[name]])), unlist)) # attributes as data.frame
-      df$key <- as.double(rownames(df)) # add hashcode (index) as double column
-      df <- df[, c(5, 1, 2, 3, 4)]# reorder so new key column in pos 1
-      #Need raster or it collides with pryr::subs
-      # RasterBrick of substituted values (default compiled as factors... not sure how to avoid this)
-      rb <- raster::subs(rs[[1]], df, which=2:5)
-      r.thlb <- deratify(rb, layer=2)
-      r.muid <- raster(rs[[1]])
+    rs.list <- lapply(tif_files, function(f) {
+      r <- terra::rast(f)
+      r <- terra::deepcopy(r)  # ensures a memory copy, not linked to disk
+      r
+    })
+    names(rs.list) <- P(sim)$basenames  # Rename the list members their respective TSA names
+
+
+    recompile.rs <- function(name, rsList = rs.list, hdtList = hdt.list) {
+      mu.id <- as.integer(sub("^[A-Za-z]+", "", name))
+      rs <-rsList[[name]]
+
+      df <- as.data.frame(lapply(data.frame(do.call(rbind, hdtList[[name]])), unlist))
+      df$key <- as.numeric(rownames(df))
+      df[, 1] <- mu.id
+      df <- df[, c(5, 1, 2, 3, 4)]
+      colnames(df) <- c("key", "fmuid", "thlb", "au", "blockid")
+
+      # Make sure key and raster cell values are both integers
+      df$key <- as.integer(round(df$key))
+      rs[[1]] <- round(rs[[1]])
+
+      # Apply terra::subst() one column at a time
+      r.fmuid   <- terra::subst(rs[[1]], df$key, df$fmuid)
+      r.thlb    <- terra::subst(rs[[1]], df$key, df$thlb)
+      r.au      <- terra::subst(rs[[1]], df$key, df$au)
+      r.blockid <- terra::subst(rs[[1]], df$key, df$blockid)
+
+      # Fix 'age' (force in memory)
+      r.age <- rs[[2]]
+      terra::values(r.age) <- terra::values(rs[[2]])
+
+      # Fill in muid
+      r.muid <- r.fmuid
       r.muid[!is.na(r.thlb)] <- mu.id
-      r.au <- deratify(rb, layer=3)
-      r.blockid <- (1000000000 * r.muid) + rs[[3]]
-      # r.age <- rs[[2]]
-      ###############################################################
-      # temporary solution to stop age from being file-backed
-      ageValues <- getValues(rs[[2]])
-      r.age <- raster(rs[[2]]) %>% setValues(., ageValues)
-      ###############################################################
-      return(raster::stack(r.muid, r.thlb, r.au, r.blockid, r.age))
+
+      # Combine all layers into one SpatRaster
+      rb <- c(r.fmuid, r.thlb, r.au, r.blockid, r.age)
+      names(rb) <- c("fmuid", "thlb", "au", "blockid", "age")
+
+      return(rb)
     }
 
-    # Now, apply function 'recompile.rs' to each element of rs.list:
-    rs.list <- lapply(names(rs.list), recompile.rs)
-    # prep rs for use as arg in do.call wrapper to raster::mosaic function
-    names(rs.list) <- NULL # else TSA names will be interpreted as arg names by raster::mosaic
-    if (length(P(sim)$basenames) > 1) {
-      rs.list$fun <- mean
-      rs.list$na.rm <- TRUE
-      rb <- do.call(mosaic, rs.list)
-      sim$landscape <- raster::stack(rb)
+
+    # Use function 'recompile.rs' to recompile each TSA raster set:
+    rs.list <- lapply(names(rs.list), function(nm) recompile.rs(nm, rs.list, hdt.list))
+
+    # Remove TSA names to avoid mosaic() argument naming issues (delete this?)
+    names(rs.list) <- NULL
+
+    # If more than one TSA, mosaic them together (TODO: This doesn't work. Do I want a SpatRasterCollection?)
+    if (length(rs.list) > 1) {
+      #r_merged <- do.call(terra::mosaic, c(rs.list, fun = "mean"))  # Merge by using `mosaic`, which is slower but handles overlapping cells
+      r_merged <- do.call(terra::merge, rs.list) # merge by using `merge`, which is faster but may break with overlapping cells
+      sim$landscape <- r_merged
     } else {
-      sim$landscape <- raster::stack(rs.list)
+      # If only one TSA — just stack its layers
+      sim$landscape <- rs.list[[1]]
     }
-    names(sim$landscape) <- c('fmuid', 'thlb', 'au', 'blockid', 'age')
+
+    # Assign standard layer names
+    names(sim$landscape) <- c("fmuid", "thlb", "au", "blockid", "age")
+
   }
 
 
+
   ## Get the studyArea if we don't already have it. Defaults to BC Timber Supply Areas from bcdata
-    # Set dPath directory
+  # Make a message if it is suppliedElsewhere:
+  if (SpaDES.core::suppliedElsewhere("studyArea", sim)) {
+    message("studyArea supplied elsewhere, skipping creation.")
+  }
+  # Set dPath directory
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
 
-  # Use bcdata package to get the TSA boundary map
+  #Use bcdata package to get the TSA boundary map
   if (!SpaDES.core::suppliedElsewhere("studyArea", sim)) {
-
+    message("studyArea not supplied elsewhere; creating")
     tsa_id <- "8daa29da-d7f4-401c-83ae-d962e3a28980"  # Timber Supply Areas map
 
     # Define where the local copy should be saved
@@ -214,6 +236,12 @@ plotFun <- function(sim) {
     tsas <- terra::aggregate(tsas, by = tsas$foo, fun = mean)        # Aggregate into a single polygon. Take the mean
 
     sim$studyArea <- tsas
+  }
+
+  if (!suppliedElsewhere("rasterToMatch", sim)) {
+    sim$rasterToMatch <- terra::rast(sim$landscape[[1]])
+    sim$rasterToMatch[] <- 1  # give it an attribute, otherwise mask won't work
+    sim$rasterToMatch <- terra::mask(sim$rasterToMatch, sim$studyArea)
   }
 
   return(invisible(sim))
