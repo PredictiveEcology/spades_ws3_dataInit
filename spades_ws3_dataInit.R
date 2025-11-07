@@ -1,3 +1,17 @@
+## Description:
+# This module prepares data for input to the spades_WS3 module family.
+# Currently this works with a datalad repository prepared by Dr. Greg Paradis and the UBC-FRESH lab
+
+## What it does:
+# 1. It prepares a python environment for WS3
+# 2. Imports datalad repo. This includes:
+#         - an 'hdt table' of WS3 hashes that connect AUs to the landscape tifs;
+#         - landscape tifs output from WS3. They have four columns: "key", "fmuid", "thlb", "au", "blockid"
+# 3. Combines these to make a 'landscape' object.
+# 4. If not suppliedElsewhere, uses this landscape object to create the studyArea.
+
+
+
 defineModule(sim, list(
   name = "spades_ws3_dataInit",
   description = "This module prepares data for input to spades_ws3 module family. Currently this works with datalad repository prepared by the UBC-FRESH lab",
@@ -281,7 +295,7 @@ git_submodule_add_in_SpaDES_module <- function(module.path, current.module.name,
   # Check if already in submodule list
   existing <- tryCatch(
     basename(gert::git_submodule_list()$path),
-    error = function(e) character(0) # if no submodules exist yet
+    error = function(err) character(0) # if no submodules exist yet
   )
 
   already_there <- dir.exists(submodule_path) ||
