@@ -1,11 +1,11 @@
 ## Description:
 # This module prepares data for input to the spades_WS3 module family.
-# Currently this works with a datalad repository prepared by Dr. Greg Paradis and the UBC-FRESH lab
+# Currently (2025-2026) this works with a datalad repository prepared by Dr. Greg Paradis and the UBC-FRESH lab
 
 ## What it does:
 # 1. It prepares a python environment for WS3
 # 2. Imports datalad repo. This includes:
-#         - an 'hdt table' of WS3 hashes that connect AUs to the landscape tifs;
+#         - an 'hdt table' of WS3 hashes that connect analysis units (AUs) to the landscape tifs;
 #         - landscape tifs output from WS3. They have four columns: "key", "fmuid", "thlb", "au", "blockid"
 # 3. Combines these to make a 'landscape' object.
 # 4. If not suppliedElsewhere, uses this landscape object to create the studyArea.
@@ -36,6 +36,7 @@ defineModule(sim, list(
     defineParameter("basenames", "character", NA, NA, NA,'vector of MU baseneames to load, beginning with tsa, e.g. "tsa40"'),
     defineParameter("base.year", 'numeric', 2015, NA, NA, "base year of forest inventory data"),
     defineParameter("tif.path", "character", "tif", NA, NA, "Path to TIF raster inventory files"),
+    defineParameter("merge.approach", "character", "mosaic", NA, NA, "Whether to use terra:merge (default) or terra:mosaic to combine multiple input rasters"),
     defineParameter("hdtPath", "character", "hdt", NA, NA, "Path to pickled hdt files"),
     defineParameter("hdtPrefix", "character", "hdt_", NA, NA, "HDT filename prefix"),
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first plot event should occur"),
@@ -95,6 +96,12 @@ plotFun <- function(sim) {
 
 .inputObjects <- function(sim) {
 
+  # To import the FRESH lab datalad structure we need to:
+  # 1. initialize a Python environment
+  # 2. Add the datalad git submodule as a SpaDES module
+  # 3. Since the datalad data is found in the datalad directory, we need to create softlinks between the inputPath and the datalad data directory
+  #    (so that later SpaDES modules can find them in the inputPath)
+  # 4.
   ## Prepare Python Environment
   py_packages <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "git-annex","seaborn", "folium", "debugpy","pulp")
   py_version<-'3.12'
@@ -113,7 +120,7 @@ plotFun <- function(sim) {
   datalad<-import("datalad.api")           # load datalad module into reticulate
   this.module.path<-modulePath(sim)[grep(currentModule(sim), lapply(modulePath(sim), list.files))] # This is just modulePath, but adapted to be safe for multiple modulePaths. It just picks the directory that the current module is in
   datalad.dir<-file.path(this.module.path,currentModule(sim),"cccandies_demo_input")   # The directory to put the datalad files
-  datalad$get(path = datalad.dir, recursive = TRUE)   # get the datalad files
+  datalad$get(path = datalad.dir, recursive = TRUE)   # use reticulate to get the datalad files
 
   # Create softlinks between inputPath(sim) and the datalad directory:
   create_link_tree(
@@ -123,8 +130,14 @@ plotFun <- function(sim) {
 
 
   ## Import the datalad input files prepared by the UBC-FRESH lab to work with SpaDES:
+  ## This section imports ws3 landscape themes from the hdt tables and ages from inventory_init.tif and combines them into a single 'landscape' raster.
 
-  # Import the hdt tables:
+  # Import the hdt tables if they are not suppliedElsewhere
+  # The hdt tables are pickled Header Dictionary Triples (HDT) tables from the FRESH lab datalad pipeline
+  # This recombiles the HDT files into an R list
+  # The HDT tables define the WS3 THEMES assigned to each development type
+  # Each element is a Development Type reference number, and the subelements are: fmuid (TSA number), THLB (0 or 1), AU, blockid
+  # See: https://github.com/UBC-FRESH/cccandies_demo_input and https://github.com/UBC-FRESH/wbi_ria_yield
   if (!SpaDES.core::suppliedElsewhere("hdt", sim)) {
     py <- import_builtins()
     pickle <- import("pickle")
@@ -139,10 +152,15 @@ plotFun <- function(sim) {
   }
 
   # Convert the datalad tifs and inventory to 'landscape' object:
+  # There is one inventory raster per 'basename' (generally TSA). We combine these into a single raster.
+  # These define our 'landscape' raster.
   if (!SpaDES.core::suppliedElsewhere("landscape", sim)) {
+
+    # Where are the inventory .tifs?
     # Build full paths to all inventory rasters
     tif_files <- file.path(inputPath(sim), P(sim)$tif.path, P(sim)$basenames, "inventory_init.tif")
 
+    # Compile into a list:
     rs.list <- lapply(tif_files, function(f) {
       r <- terra::rast(f)
       r <- terra::deepcopy(r)  # ensures a memory copy, not linked to disk
@@ -150,7 +168,9 @@ plotFun <- function(sim) {
     })
     names(rs.list) <- P(sim)$basenames  # Rename the list members their respective TSA names
 
-
+    # recompile rasters:
+    # This function takes all the inventory rasters in rs.list and matches them by name with the hdt tables in hdt.list
+    # Then it combines them all into a single SpatRaster
     recompile.rs <- function(name, rsList = rs.list, hdtList = hdt.list) {
       mu.id <- as.integer(sub("^[A-Za-z]+", "", name))
       rs <-rsList[[name]]
@@ -190,16 +210,24 @@ plotFun <- function(sim) {
     # Use function 'recompile.rs' to recompile each TSA raster set:
     rs.list <- lapply(names(rs.list), function(nm) recompile.rs(nm, rs.list, hdt.list))
 
-    # Remove TSA names to avoid mosaic() argument naming issues (delete this?)
-    names(rs.list) <- NULL
+    # If more than one basename (or TSA), connect them together
+    # if (length(rs.list) > 1) {
+    #   #r_merged <- do.call(terra::mosaic, c(rs.list, fun = "mean"))  # Merge by using `mosaic`, which is slower but handles overlapping cells
+    #   r_merged <- do.call(terra::merge, rs.list)                     # merge by using `merge`, which is faster but may break with overlapping cells
+    #   sim$landscape <- r_merged
+    # } else {
+    #   # If only one TSA — just stack its layers
+    #   sim$landscape <- rs.list[[1]]
+    # }
 
-    # If more than one TSA, mosaic them together (TODO: This doesn't work. Do I want a SpatRasterCollection?)
     if (length(rs.list) > 1) {
-      #r_merged <- do.call(terra::mosaic, c(rs.list, fun = "mean"))  # Merge by using `mosaic`, which is slower but handles overlapping cells
-      r_merged <- do.call(terra::merge, rs.list) # merge by using `merge`, which is faster but may break with overlapping cells
+      r_merged <- if (P(sim)$merge.approach == "mosaic") {
+        do.call(terra::mosaic, c(rs.list, fun = "mean"))  # Slower, handles overlaps
+      } else {
+        do.call(terra::merge, rs.list)                     # Faster, no overlaps
+      }
       sim$landscape <- r_merged
     } else {
-      # If only one TSA — just stack its layers
       sim$landscape <- rs.list[[1]]
     }
 
